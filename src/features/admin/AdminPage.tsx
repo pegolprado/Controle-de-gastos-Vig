@@ -13,6 +13,7 @@ import { env } from '@/lib/env';
 import { errorMessage } from '@/lib/errors';
 import { formatDateTime } from '@/lib/dates';
 import { cn } from '@/lib/cn';
+import { BASE_URL } from '@/lib/appUrl';
 import type { AppSettings, UserStatus } from '@/lib/types';
 import {
   adminAudit, adminErrors, adminListReleases, adminListUsers, adminRegisterRelease, adminSetReleaseStatus, adminSetUserStatus,
@@ -59,7 +60,7 @@ export default function AdminPage() {
 
 function Overview() {
   const stats = useQuery({ queryKey: ['admin', 'stats'], queryFn: adminStats });
-  const server = useQuery({ queryKey: ['admin', 'version.json'], queryFn: async () => (await fetch('/version.json', { cache: 'no-store' })).json() as Promise<{ version: string; commit: string; builtAt: string }>, retry: false });
+  const server = useQuery({ queryKey: ['admin', 'version.json'], queryFn: async () => (await fetch(`${BASE_URL}version.json`, { cache: 'no-store' })).json() as Promise<{ version: string; commit: string; builtAt: string }>, retry: false });
   const s = stats.data ?? {};
   const items = [
     ['Usuários', s.users_total], ['Ativos', s.users_active], ['Pendentes', s.users_pending], ['Suspensos/revogados', s.users_suspended],

@@ -6,6 +6,7 @@ import { FullScreenLoader, PublicOnly, RequireAppOwner, RequireAuth } from '@/ap
 import { MaintenanceBanner } from '@/app/MaintenanceBanner';
 import { UpdatePrompt } from '@/pwa/UpdatePrompt';
 import { RouteError } from '@/app/ErrorBoundary';
+import { BASE_URL } from '@/lib/appUrl';
 
 // Carregamento sob demanda: cada tela é um módulo separado.
 const Dashboard = lazy(() => import('@/features/dashboard/DashboardPage'));
@@ -51,7 +52,8 @@ function Protected() {
   );
 }
 
-const router = createBrowserRouter([
+const router = createBrowserRouter(
+  [
   {
     element: <Root />,
     errorElement: <RouteError />,
@@ -87,7 +89,9 @@ const router = createBrowserRouter([
       },
     ],
   },
-]);
+  ],
+  { basename: BASE_URL.replace(/\/$/, '') || '/' },
+);
 
 export default function App() {
   return <RouterProvider router={router} />;

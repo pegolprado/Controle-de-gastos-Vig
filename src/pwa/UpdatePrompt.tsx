@@ -6,6 +6,7 @@ import { env } from '@/lib/env';
 import { hasDirtyForms, hasPendingWrites, onDirtyChange } from '@/lib/formGuard';
 import { Button } from '@/components/ui/Button';
 import { isOutdated } from './version';
+import { BASE_URL } from '@/lib/appUrl';
 
 const CHECK_INTERVAL = 30 * 60_000;
 
@@ -44,7 +45,7 @@ export function UpdatePrompt() {
       if (!navigator.onLine) return;
       try {
         await registration.current?.update();
-        const res = await fetch('/version.json', { cache: 'no-store' });
+        const res = await fetch(`${BASE_URL}version.json`, { cache: 'no-store' });
         if (res.ok) setServerVersion(((await res.json()) as { version: string }).version);
       } catch {
         /* sem rede: tenta depois */

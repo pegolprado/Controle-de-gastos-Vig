@@ -16,7 +16,7 @@ Tempo estimado: 30 a 40 minutos. Você precisa de contas gratuitas no **Supabase
      npx supabase link --project-ref SEU_REF
      npx supabase db push
      ```
-   - **Painel:** em **SQL Editor**, execute cada arquivo de `supabase/migrations/` **na ordem do nome**.
+   - **Painel (um passo só):** em **SQL Editor → New query**, cole todo o conteúdo de `supabase/setup.sql` e clique em **Run**. O arquivo junta as migrações e é verificado automaticamente em `npm run test:db`.
 4. **Authentication → URL Configuration**:
    - Site URL: `https://SEU-DOMINIO` (ou `https://finance-os.pages.dev`);
    - Redirect URLs: `https://SEU-DOMINIO/**` e `http://localhost:5173/**`.
@@ -25,7 +25,18 @@ Tempo estimado: 30 a 40 minutos. Você precisa de contas gratuitas no **Supabase
 7. *(Opcional)* **Database → Extensions → pg_cron**: ligue e reexecute a migração `20261016000800_storage_cron.sql`. Ela agenda a geração diária de recorrências e a limpeza de registros técnicos. Sem `pg_cron`, as recorrências são geradas quando alguém abre o app.
 8. *(Opcional)* Exclusão de conta pelo próprio usuário: `npx supabase functions deploy delete-account`. Sem ela, o app usa o modo de reserva: apaga os dados e desativa o perfil, mas o login continua existindo até um administrador removê-lo em **Authentication → Users**.
 
-## 2. Hospedagem (Cloudflare Pages)
+## 2. Hospedagem
+
+### Opção 0 — GitHub Pages (a mais rápida; repositório público)
+
+1. **GitHub → Settings → Pages → Build and deployment → Source: GitHub Actions**.
+2. Cadastre a URL e a anon key (públicas) em **Settings → Secrets and variables → Actions → Variables** (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) ou no arquivo `.github/public-config.env`.
+3. Cada push em `main` roda lint, tipos e testes, e publica em `https://USUARIO.github.io/REPOSITORIO/` (workflow `pages.yml`).
+4. No Supabase, use esse endereço em *Site URL* e em *Redirect URLs* (`https://USUARIO.github.io/REPOSITORIO/**`).
+
+Limitação: o GitHub Pages não permite cabeçalhos HTTP próprios, então a CSP de `_headers` só vale no Cloudflare/Netlify. Para produção definitiva, prefira o Cloudflare.
+
+### Cloudflare Pages
 
 Plano grátis: banda ilimitada, HTTPS automático, deploy de prévia por branch e **rollback com um clique**.
 

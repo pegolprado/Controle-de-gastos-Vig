@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { errorMessage } from '@/lib/errors';
@@ -28,7 +28,7 @@ export default function CallbackPage() {
         <div className="max-w-sm space-y-3">
           <p className="font-semibold">Não foi possível validar o link.</p>
           <p className="text-sm text-muted">{error}</p>
-          <a href="/entrar" className="font-semibold text-brand">Ir para o login</a>
+          <Link to="/entrar" className="font-semibold text-brand">Ir para o login</Link>
         </div>
       ) : (
         <Loader2 className="size-6 animate-spin text-brand" aria-label="Validando" />

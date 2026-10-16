@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { Invite, Member, WorkspaceRole } from '@/lib/types';
 import { unwrap, unwrapList } from './base';
+import { appUrl } from '@/lib/appUrl';
 
 export async function createWorkspace(name: string): Promise<string> {
   return unwrap(await supabase.rpc('create_workspace', { p_name: name })) as string;
@@ -46,5 +47,5 @@ export async function revokeSupport(ws: string) {
   unwrap(await supabase.rpc('revoke_support_access', { p_workspace: ws }));
 }
 export function inviteLink(token: string) {
-  return `${location.origin}/convite/${token}`;
+  return appUrl(`/convite/${token}`);
 }

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { errorMessage } from '@/lib/errors';
+import { appUrl } from '@/lib/appUrl';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import { AuthLayout } from './AuthLayout';
@@ -17,7 +18,7 @@ export function RecoverPage() {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${location.origin}/redefinir-senha` });
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: appUrl('/redefinir-senha') });
     setLoading(false);
     if (error && !/rate/i.test(error.message)) {
       toast.error(errorMessage(error));

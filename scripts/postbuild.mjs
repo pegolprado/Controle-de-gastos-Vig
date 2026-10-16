@@ -4,7 +4,7 @@
  * e o injeta na Content-Security-Policy de dist/_headers (sem 'unsafe-inline').
  */
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, copyFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const dist = resolve(import.meta.dirname, '..', 'dist');
@@ -17,3 +17,9 @@ if (existsSync(headersPath)) {
   writeFileSync(headersPath, headers);
 }
 console.log(`CSP: ${hashes.length} script(s) inline com hash.`);
+
+// GitHub Pages não tem fallback de SPA: 404.html = index.html faz as rotas funcionarem.
+if (process.env.SPA_404 === '1') {
+  copyFileSync(resolve(dist, 'index.html'), resolve(dist, '404.html'));
+  console.log('404.html gerado para hospedagem estática (GitHub Pages).');
+}

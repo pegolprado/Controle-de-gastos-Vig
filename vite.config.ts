@@ -35,7 +35,10 @@ function versionManifest(): Plugin {
   };
 }
 
+const base = process.env.VITE_BASE || '/';
+
 export default defineConfig({
+  base,
   define: {
     __APP_VERSION__: JSON.stringify(build.version),
     __APP_COMMIT__: JSON.stringify(build.commit),
@@ -55,27 +58,27 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        id: '/',
+        id: base,
         name: 'FINANCE OS',
         short_name: 'Finance OS',
         description: 'Controle financeiro pessoal e familiar.',
         lang: 'pt-BR',
         dir: 'ltr',
-        start_url: '/',
-        scope: '/',
+        start_url: base,
+        scope: base,
         display: 'standalone',
         orientation: 'portrait',
         background_color: '#070b14',
         theme_color: '#070b14',
         categories: ['finance', 'productivity'],
         icons: [
-          { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/pwa-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: `${base}pwa-192.png`, sizes: '192x192', type: 'image/png' },
+          { src: `${base}pwa-512.png`, sizes: '512x512', type: 'image/png' },
+          { src: `${base}pwa-maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
         shortcuts: [
-          { name: 'Nova despesa', url: '/?novo=expense', icons: [{ src: '/pwa-192.png', sizes: '192x192' }] },
-          { name: 'Lançamentos', url: '/lancamentos', icons: [{ src: '/pwa-192.png', sizes: '192x192' }] },
+          { name: 'Nova despesa', url: `${base}?novo=expense`, icons: [{ src: `${base}pwa-192.png`, sizes: '192x192' }] },
+          { name: 'Lançamentos', url: `${base}lancamentos`, icons: [{ src: `${base}pwa-192.png`, sizes: '192x192' }] },
         ],
       },
       workbox: {
@@ -83,18 +86,18 @@ export default defineConfig({
         // são cacheados pelo service worker (Supabase fica fora do cache).
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest}'],
         // o gerador de PDF é pesado e raro: baixado sob demanda, não no pré-cache
-        globIgnores: ['**/pdf-*.js'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/version\.json$/, /^\/auth\//],
+        globIgnores: ['**/jspdf*.js', '**/html2canvas*.js', '**/index.es-*.js', '**/purify*.js', '**/jspdf.plugin*.js'],
+        navigateFallback: `${base}index.html`,
+        navigateFallbackDenylist: [/\/version\.json$/],
         cleanupOutdatedCaches: true,
         clientsClaim: false,
         skipWaiting: false,
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.origin === self.location.origin && /\/assets\/pdf-.*\.js$/.test(url.pathname),
+            urlPattern: ({ url }) => url.origin === self.location.origin && /\/assets\/(jspdf|html2canvas|index\.es|purify).*\.js$/.test(url.pathname),
             handler: 'CacheFirst',
-            options: { cacheName: 'fos-lazy-assets', expiration: { maxEntries: 4, maxAgeSeconds: 60 * 60 * 24 * 30 } },
+            options: { cacheName: 'fos-lazy-assets', expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 30 } },
           },
         ],
       },
@@ -109,8 +112,6 @@ export default defineConfig({
       output: {
         manualChunks(id: string) {
           if (!id.includes('node_modules')) return undefined;
-          if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) return 'charts';
-          if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('canvg') || id.includes('dompurify')) return 'pdf';
           if (id.includes('@supabase')) return 'supabase';
           if (id.includes('react-router') || id.includes('react-dom') || id.includes('/react/') || id.includes('scheduler')) return 'react';
           return undefined;

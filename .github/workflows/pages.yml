@@ -1,0 +1,55 @@
+name: Publicar no GitHub Pages
+
+# Hospedagem gratuita alternativa ao Cloudflare (repositório público).
+# Endereço: https://<usuario>.github.io/<repositorio>/
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint && npm run typecheck && npm test
+      - name: Configuração pública do Supabase
+        run: |
+          # Valores PÚBLICOS (URL e anon key). Prioridade: variáveis do repositório; senão o arquivo versionado.
+          if [ -f .github/public-config.env ]; then cat .github/public-config.env >> "$GITHUB_ENV"; fi
+          if [ -n "${{ vars.VITE_SUPABASE_URL }}" ]; then echo "VITE_SUPABASE_URL=${{ vars.VITE_SUPABASE_URL }}" >> "$GITHUB_ENV"; fi
+          if [ -n "${{ vars.VITE_SUPABASE_ANON_KEY }}" ]; then echo "VITE_SUPABASE_ANON_KEY=${{ vars.VITE_SUPABASE_ANON_KEY }}" >> "$GITHUB_ENV"; fi
+      - name: Build
+        run: npm run build
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_APP_ENV: production
+          SPA_404: '1'
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

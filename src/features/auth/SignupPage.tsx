@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { MailCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { errorMessage } from '@/lib/errors';
+import { appUrl } from '@/lib/appUrl';
 import { useBrand } from '@/app/BrandProvider';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
@@ -40,7 +41,7 @@ export default function SignupPage() {
       password,
       options: {
         data: { full_name: name.trim() },
-        emailRedirectTo: `${window.location.origin}/auth/callback${from ? `?next=${encodeURIComponent(from)}` : ''}`,
+        emailRedirectTo: appUrl(`/auth/callback${from ? `?next=${encodeURIComponent(from)}` : ''}`),
       },
     });
     setLoading(false);
