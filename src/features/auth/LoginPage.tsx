@@ -6,6 +6,7 @@ import { errorMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import { AuthLayout } from './AuthLayout';
+import { InstallButton } from '@/pwa/InstallPrompt';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -62,6 +63,7 @@ export default function LoginPage() {
         <Link to="/recuperar" className="text-center text-sm font-semibold text-muted hover:text-fg">
           Esqueci minha senha
         </Link>
+        <InstallButton className="mt-2" />
       </form>
     </AuthLayout>
   );
