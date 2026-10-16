@@ -56,7 +56,7 @@ export default defineConfig({
       // (ou automaticamente quando não há formulário aberto). Nada é perdido.
       registerType: 'prompt',
       injectRegister: false,
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.png', 'favicon-32.png', 'apple-touch-icon.png', 'logo-mark.png'],
       manifest: {
         id: base,
         name: 'Finance MV',
