@@ -20,6 +20,7 @@ import { downloadFile } from '@/lib/csv';
 import { formatDateTime, todayISO } from '@/lib/dates';
 import { passwordIssues } from '@/features/auth/SignupPage';
 import { updatePreferences, updateProfile } from '@/services/session';
+import { InstallButton } from '@/pwa/InstallPrompt';
 
 const EXPORT_TABLES = ['accounts', 'categories', 'credit_cards', 'card_invoices', 'transactions', 'tx_settlements', 'installment_groups', 'recurrences', 'budgets', 'goals', 'goal_contributions'] as const;
 
@@ -137,7 +138,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex gap-3 text-[13px] text-muted">
               <Smartphone className="size-5 shrink-0 text-brand" aria-hidden />
-              <p><strong className="text-fg">Instalar no celular:</strong> no Android (Chrome), toque em ⋮ → “Instalar app”. No iPhone (Safari), toque em Compartilhar → “Adicionar à Tela de Início”. No computador, use o ícone de instalação na barra de endereço.</p>
+              <div className="flex flex-col gap-3"><InstallButton /><p><strong className="text-fg">Instalar no celular:</strong> no Android (Chrome), toque em ⋮ → “Instalar app”. No iPhone (Safari), toque em Compartilhar → “Adicionar à Tela de Início”. No computador, use o ícone de instalação na barra de endereço.</p></div>
             </div>
           </div>
         </Card>

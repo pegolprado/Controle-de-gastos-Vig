@@ -11,6 +11,7 @@ import { env } from '@/lib/env';
 import { IconButton } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Card';
 import { Logo } from './Logo';
+import { InstallBanner } from '@/pwa/InstallPrompt';
 import { MOBILE_NAV, NAV, NAV_ADMIN, NAV_SECONDARY } from './nav';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
@@ -151,6 +152,7 @@ export function AppShell({ banner }: { banner?: ReactNode }) {
         </header>
 
         <main id="conteudo" className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-5 sm:px-6 lg:pb-12" key={workspace?.id}>
+          <InstallBanner />
           <Suspense fallback={<PageFallback />}>
             <div key={location.pathname} className="animate-rise">
               <Outlet />
