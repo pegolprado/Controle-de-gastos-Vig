@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { addMonths, monthLabel, startOfMonth, todayISO } from '@/lib/dates';
+import { addMonths, capitalize, monthLabel, startOfMonth, todayISO } from '@/lib/dates';
 import type { ReactNode } from 'react';
 
 export function PageHeader({ title, subtitle, actions, eyebrow }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode }) {
@@ -26,10 +26,10 @@ export function MonthPicker({ value, onChange }: { value: string; onChange: (v: 
         type="button"
         onClick={() => onChange(current)}
         title="Voltar para o mês atual"
-        className="min-w-36 px-1 text-center text-sm font-semibold capitalize"
+        className="min-w-36 px-1 text-center text-sm font-semibold"
         aria-live="polite"
       >
-        {monthLabel(value)}
+        {capitalize(monthLabel(value))}
       </button>
       <button type="button" aria-label="Próximo mês" onClick={() => onChange(addMonths(value, 1))} className="grid h-full w-9 place-items-center rounded-r-xl text-muted hover:bg-surface-2 hover:text-fg">
         <ChevronRight className="size-4" aria-hidden />
