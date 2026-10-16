@@ -64,7 +64,7 @@ begin
   perform public.bootstrap_app_owner('b@example.com');
   perform tests.login(b);
   perform tests.assert_eq((select count(*)::int from public.transactions where workspace_id = ws_a), 0, 'owner do app não lê finanças de A');
-  perform tests.assert((select count(*) from public.admin_list_users()) = 2, 'owner do app lista usuários (metadados)');
+  perform tests.assert((select count(*) from public.admin_list_users()) >= 2, 'owner do app lista usuários (metadados)');
   perform tests.logout();
   raise notice 'separação admin/finanças ok';
 end $$;

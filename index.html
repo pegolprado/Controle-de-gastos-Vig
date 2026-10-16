@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Controle financeiro pessoal e familiar: contas, cartões, orçamentos e relatórios." />
+    <meta name="theme-color" content="#070b14" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>FINANCE OS</title>
+    <script>
+      // Aplica o tema antes da primeira pintura (evita flash claro/escuro)
+      (function () {
+        try {
+          var t = localStorage.getItem('fos.theme') || 'system';
+          var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+          var c = localStorage.getItem('fos.brand');
+          if (c && /^#[0-9a-f]{6}$/i.test(c)) document.documentElement.style.setProperty('--brand', c);
+        } catch (e) {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Ative o JavaScript para usar o FINANCE OS.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

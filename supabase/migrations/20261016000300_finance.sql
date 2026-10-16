@@ -262,9 +262,11 @@ create table public.recurrences (
   end_date              date check (end_date is null or end_date >= start_date),
   occurrences_generated integer not null default 0 check (occurrences_generated >= 0),
   status                public.recurrence_status not null default 'active',
+  client_request_id     uuid,
   created_by            uuid references public.profiles (id) on delete set null default auth.uid(),
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
+  unique (workspace_id, client_request_id),
   check ((card_id is null) <> (account_id is null)),
   check (card_id is null or kind = 'expense')
 );

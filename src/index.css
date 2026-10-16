@@ -1,0 +1,146 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/manrope';
+@import '@fontsource-variable/sora';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* -------------------------------------------------------------------------
+   FINANCE OS — tokens de design
+   Grafite/azul-marinho profundo, esmeralda para o favorável,
+   vermelho-rubi contido para despesas e alertas.
+   ------------------------------------------------------------------------- */
+:root {
+  --brand: #10b981;
+  --brand-fg: #03140d;
+  --bg: #f5f6f8;
+  --bg-grid: rgba(15, 23, 42, 0.035);
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --elevated: #ffffff;
+  --border: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.16);
+  --text: #0b1220;
+  --text-muted: #4b5568;
+  --text-subtle: #7a8497;
+  --positive: #059669;
+  --negative: #d43c4f;
+  --warning: #c27b0a;
+  --info: #2f6fde;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.12);
+  --shadow-lg: 0 24px 60px -24px rgba(15, 23, 42, 0.28);
+  --hero-from: #0c1526;
+  --hero-to: #0a101c;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bg: #070b14;
+  --bg-grid: rgba(148, 163, 184, 0.035);
+  --surface: #0c1220;
+  --surface-2: #111a2c;
+  --elevated: #131d31;
+  --border: rgba(148, 163, 184, 0.10);
+  --border-strong: rgba(148, 163, 184, 0.2);
+  --text: #e8edf6;
+  --text-muted: #a3adbf;
+  --text-subtle: #6f7a8f;
+  --positive: #34d399;
+  --negative: #fb7185;
+  --warning: #fbbf24;
+  --info: #60a5fa;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 30px 80px -30px rgba(0, 0, 0, 0.8);
+  --hero-from: #0f1a2e;
+  --hero-to: #0a111f;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: 'Manrope Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Sora Variable', 'Manrope Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand: var(--brand);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-elevated: var(--elevated);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+
+  --shadow-card: var(--shadow);
+  --shadow-float: var(--shadow-lg);
+
+  --radius-card: 1.125rem;
+
+  --animate-rise: rise 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade: fade 0.25s ease-out both;
+  --animate-sheet: sheet 0.34s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes sheet {
+    from { opacity: 0; transform: translateY(24px) scale(0.985); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    font-size: 15px;
+    line-height: 1.5;
+    min-height: 100dvh;
+    /* "papel milimetrado" discreto: assinatura visual do produto */
+    background-image:
+      linear-gradient(var(--bg-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-attachment: fixed;
+  }
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--brand) 30%, transparent);
+  }
+  input, select, textarea, button { font: inherit; }
+  input[type='date']::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: pointer; }
+  [data-theme='dark'] input[type='date']::-webkit-calendar-picker-indicator { filter: invert(1); }
+}
+
+@layer utilities {
+  .tabular { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+  .font-num { font-family: var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .scrollbar-none { scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .blur-values .money { filter: blur(7px); transition: filter 0.2s; }
+  .blur-values .money:hover { filter: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
