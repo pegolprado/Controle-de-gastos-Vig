@@ -59,8 +59,8 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         id: base,
-        name: 'FINANCE OS',
-        short_name: 'Finance OS',
+        name: 'Finance MV',
+        short_name: 'Finance MV',
         description: 'Controle financeiro pessoal e familiar.',
         lang: 'pt-BR',
         dir: 'ltr',

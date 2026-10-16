@@ -5,7 +5,7 @@ import type { AppSettings } from '@/lib/types';
 import { isConfigured } from '@/lib/env';
 
 const DEFAULTS: AppSettings = {
-  app_name: 'FINANCE OS',
+  app_name: 'Finance MV',
   tagline: 'Seu dinheiro, em ordem.',
   logo_url: null,
   primary_color: '#10b981',

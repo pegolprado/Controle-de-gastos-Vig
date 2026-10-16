@@ -1,4 +1,4 @@
-# FINANCE OS
+# Finance MV
 
 Controle financeiro pessoal e familiar: contas, cartões e faturas, parcelamentos, recorrências, orçamentos, metas, contas a pagar e receber, relatórios e espaços compartilhados com permissões reais. É um **PWA** que se instala no celular e no computador e se atualiza sozinho, sem reinstalar.
 

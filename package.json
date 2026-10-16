@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "FINANCE OS — controle financeiro pessoal e familiar (PWA + Supabase)",
+  "description": "Finance MV — controle financeiro pessoal e familiar (PWA + Supabase)",
   "engines": {
     "node": ">=20"
   },
