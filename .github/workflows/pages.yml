@@ -30,7 +30,7 @@ jobs:
       - name: Configuração pública do Supabase
         run: |
           # Valores PÚBLICOS (URL e anon key). Prioridade: variáveis do repositório; senão o arquivo versionado.
-          if [ -f .github/public-config.env ]; then cat .github/public-config.env >> "$GITHUB_ENV"; fi
+          if [ -f .github/public-config.env ]; then grep -E '^VITE_[A-Z_]+=.+' .github/public-config.env >> "$GITHUB_ENV" || true; fi
           if [ -n "${{ vars.VITE_SUPABASE_URL }}" ]; then echo "VITE_SUPABASE_URL=${{ vars.VITE_SUPABASE_URL }}" >> "$GITHUB_ENV"; fi
           if [ -n "${{ vars.VITE_SUPABASE_ANON_KEY }}" ]; then echo "VITE_SUPABASE_ANON_KEY=${{ vars.VITE_SUPABASE_ANON_KEY }}" >> "$GITHUB_ENV"; fi
       - name: Build
