@@ -159,7 +159,7 @@ test('proprietário acessa o painel administrativo', async ({ page }) => {
   await login(page);
   await page.goto('/admin');
   await expect(page.getByRole('heading', { name: 'Administração' })).toBeVisible();
-  await expect(page.getByText('42')).toBeVisible();
+  await expect(page.getByText('42', { exact: true })).toBeVisible();
   await page.screenshot({ path: `e2e-screens/admin-${test.info().project.name}.png`, fullPage: true });
 });
 
