@@ -91,8 +91,35 @@ try {
       console.log(`✓ ${t}${notes ? ` (${notes} verificações)` : ''}`);
     }
   }
+  // ---- Backup e restauração (procedimento real: scripts/backup.sh + restore.sh)
+  const seed = psql(url, ['-f', join(testsDir, 'seed_backup.sql')]);
+  if (seed.status !== 0) throw new Error(seed.stderr);
+  const dumpFile = join(process.env.TMPDIR || tmpdir(), `${dbName}.dump`);
+  const restoredDb = `${dbName}_restored`;
+  const restoredUrl = url.replace(dbName, restoredDb);
+  const sh = (script, env, args = []) => spawnSync('bash', [join(root, 'scripts', script), ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
+  let r1 = sh('backup.sh', { SUPABASE_DB_URL: url }, [dumpFile]);
+  if (r1.status !== 0) throw new Error(`backup falhou: ${r1.stderr}`);
+  psql(baseUrl, ['-c', `create database ${restoredDb}`]);
+  psql(restoredUrl, ['-f', join(testsDir, '00_supabase_stub.sql')]);
+  r1 = sh('restore.sh', { TARGET_DB_URL: restoredUrl }, [dumpFile]);
+  const counts = (u) => psql(u, ['-At', '-c', 'select (select count(*) from public.profiles)||\'/\'||(select count(*) from public.transactions)||\'/\'||(select sum(amount_cents) from public.transactions)']).stdout.trim();
+  const before = counts(url);
+  const after = r1.status === 0 ? counts(restoredUrl) : 'falhou';
+  // a base restaurada continua funcional: cadastro (gatilhos) + RLS
+  psql(restoredUrl, ['-f', join(testsDir, '01_helpers.sql')]);
+  const post = r1.status === 0 ? psql(restoredUrl, ['-f', join(testsDir, '20_isolation.test.sql')]) : { status: 1, stderr: r1.stderr };
+  if (r1.status !== 0 || before !== after || post.status !== 0) {
+    failed++;
+    console.error(`✗ backup/restauração (antes ${before}, depois ${after})\n${r1.stderr}\n${post.stderr}`);
+  } else {
+    console.log(`✓ backup + restauração verificados (perfis/lançamentos/soma: ${after}; RLS e cadastro funcionando na cópia)`);
+  }
+  rmSync(dumpFile, { force: true });
+  psql(baseUrl, ['-c', `drop database if exists ${restoredDb} with (force)`]);
+
   psql(baseUrl, ['-c', `drop database if exists ${dbName} with (force)`]);
-  console.log(`\n${tests.length - failed}/${tests.length} arquivos de teste do banco passaram.`);
+  console.log(`\n${tests.length - failed}/${tests.length} arquivos de teste do banco passaram${failed ? ' (com falhas)' : ''}.`);
 } catch (e) {
   failed = failed || 1;
   console.error(String(e.message || e));

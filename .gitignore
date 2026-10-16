@@ -11,3 +11,4 @@ test-results
 .DS_Store
 supabase/.temp
 supabase/.branches
+e2e-screens
