@@ -166,7 +166,7 @@ test('proprietário acessa o painel administrativo', async ({ page }) => {
 test.describe('PWA', () => {
   test('manifesto, ícones e version.json publicados', async ({ request }) => {
     const manifest = await (await request.get('/manifest.webmanifest')).json();
-    expect(manifest.name).toBe('FINANCE OS');
+    expect(manifest.name).toBe('Finance MV');
     expect(manifest.display).toBe('standalone');
     expect(manifest.icons.length).toBeGreaterThanOrEqual(3);
     const version = await (await request.get('/version.json')).json();

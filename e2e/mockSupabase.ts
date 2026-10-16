@@ -226,7 +226,7 @@ export async function installMock(page: Page, s: MockState) {
       const table = path.replace('/rest/v1/', '');
       const accept = req.headers()['accept'] ?? '';
       const single = accept.includes('vnd.pgrst.object');
-      if (table === 'app_settings') return json(route, single ? { app_name: 'FINANCE OS', tagline: 'Seu dinheiro, em ordem.', logo_url: null, primary_color: '#10b981', signup_mode: 'open', features: {}, limits: {}, min_client_version: null, maintenance_message: null, updated_at: '' } : []);
+      if (table === 'app_settings') return json(route, single ? { app_name: 'Finance MV', tagline: 'Seu dinheiro, em ordem.', logo_url: null, primary_color: '#10b981', signup_mode: 'open', features: {}, limits: {}, min_client_version: null, maintenance_message: null, updated_at: '' } : []);
       if (table === 'account_balances') return json(route, balances(s));
       const rows = (s.tables[table] ??= []);
       if (req.method() === 'GET') {
