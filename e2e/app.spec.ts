@@ -171,7 +171,10 @@ test.describe('PWA', () => {
     expect(manifest.icons.length).toBeGreaterThanOrEqual(3);
     const version = await (await request.get('/version.json')).json();
     expect(version.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect((await request.get('/sw.js')).ok()).toBe(true);
+    const sw = await request.get('/sw.js');
+    expect(sw.ok()).toBe(true);
+    // nome/ícone do app instalado nunca vêm de cache antigo
+    expect(await sw.text()).not.toContain('manifest.webmanifest');
     expect((await request.get('/pwa-512.png')).ok()).toBe(true);
   });
 });

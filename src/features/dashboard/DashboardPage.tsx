@@ -146,17 +146,17 @@ export default function DashboardPage() {
             <SlidersHorizontal className="size-4" aria-hidden /> Filtros{filtersActive ? ' •' : ''}
           </button>
           <div className={cn('w-full flex-wrap gap-2 sm:flex sm:w-auto', showFilters ? 'flex' : 'hidden')}>
-          <Select aria-label="Filtrar por conta" value={accountId} onChange={(e) => { setAccountId(e.target.value); if (e.target.value) setCardId(''); }} className="h-10 text-sm sm:w-40">
+          <Select aria-label="Filtrar por conta" value={accountId} onChange={(e) => { setAccountId(e.target.value); if (e.target.value) setCardId(''); }} className="h-10 text-sm sm:w-48">
             <option value="">Todas as contas</option>
             {accounts.filter((a) => !a.archived).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </Select>
           {cards.length > 0 && (
-            <Select aria-label="Filtrar por cartão" value={cardId} onChange={(e) => { setCardId(e.target.value); if (e.target.value) setAccountId(''); }} className="h-10 text-sm sm:w-40">
+            <Select aria-label="Filtrar por cartão" value={cardId} onChange={(e) => { setCardId(e.target.value); if (e.target.value) setAccountId(''); }} className="h-10 text-sm sm:w-48">
               <option value="">Todos os cartões</option>
               {cards.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           )}
-          <Select aria-label="Filtrar por categoria" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="h-10 text-sm sm:w-44">
+          <Select aria-label="Filtrar por categoria" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="h-10 text-sm sm:w-48">
             <option value="">Todas as categorias</option>
             {categories.filter((c) => !c.parent_id && c.kind === 'expense' && !c.archived).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>

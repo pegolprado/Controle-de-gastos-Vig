@@ -56,7 +56,7 @@ export default defineConfig({
       // (ou automaticamente quando não há formulário aberto). Nada é perdido.
       registerType: 'prompt',
       injectRegister: false,
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.png', 'favicon-32.png', 'apple-touch-icon.png', 'logo-mark.png'],
       manifest: {
         id: base,
         name: 'Finance MV',
@@ -84,7 +84,9 @@ export default defineConfig({
       workbox: {
         // Somente o "casco" da aplicação é cacheado. Dados financeiros NUNCA
         // são cacheados pelo service worker (Supabase fica fora do cache).
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest}'],
+        // O manifesto (nome e ícone do app instalado) fica FORA do cache — o
+        // plugin sempre o inclui, então scripts/postbuild.mjs o remove do sw.js.
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // o gerador de PDF é pesado e raro: baixado sob demanda, não no pré-cache
         globIgnores: ['**/jspdf*.js', '**/html2canvas*.js', '**/index.es-*.js', '**/purify*.js', '**/jspdf.plugin*.js'],
         navigateFallback: `${base}index.html`,

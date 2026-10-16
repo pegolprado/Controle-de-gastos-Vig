@@ -25,7 +25,7 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: 'npx vite build --mode e2e && npx vite preview --port 4173 --strictPort',
+        command: 'npx vite build --mode e2e && node scripts/postbuild.mjs && npx vite preview --port 4173 --strictPort',
         url: 'http://localhost:4173',
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
