@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Download, FileSearch, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Download, FileSearch, FileUp, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useWorkspace, useWsId } from '@/app/WorkspaceProvider';
 import { useBrand } from '@/app/BrandProvider';
 import { useLookups, wsKey } from '@/hooks/useFinance';
@@ -21,6 +21,7 @@ import { listAllTransactions, listTransactions, type TxFilters } from '@/service
 import { useQuickAdd } from './QuickAdd';
 import { groupByDate, txSignedAmount, TxRow } from './TxRow';
 import { TransactionDetail } from './TransactionDetail';
+import { ImportDialog } from './ImportDialog';
 
 type Period = 'month' | 'last' | '90' | 'year' | 'all' | 'custom';
 
@@ -50,6 +51,7 @@ export default function TransactionsPage() {
   const { canContribute } = useWorkspace();
   const { accounts, cards, categories, accountMap, categoryMap, cardMap } = useLookups();
   const quickAdd = useQuickAdd();
+  const [importOpen, setImportOpen] = useState(false);
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState(params.get('q') ?? '');
   const [period, setPeriod] = useState<Period>((params.get('periodo') as Period) || 'month');
@@ -192,6 +194,11 @@ export default function TransactionsPage() {
         subtitle="Receitas, despesas, transferências e pagamentos."
         actions={
           <>
+            {canContribute && (
+              <Button size="sm" icon={<FileUp className="size-4" />} onClick={() => setImportOpen(true)}>
+                Importar
+              </Button>
+            )}
             {brand.features.exports !== false && (
               <Button size="sm" icon={<Download className="size-4" />} loading={exporting} onClick={exportCSV} disabled={!rows.length}>
                 CSV
@@ -320,6 +327,7 @@ export default function TransactionsPage() {
       </Card>
 
       {selected && <TransactionDetail tx={selected} onClose={() => setSelected(null)} />}
+      {importOpen && <ImportDialog open onClose={() => setImportOpen(false)} />}
     </>
   );
 }

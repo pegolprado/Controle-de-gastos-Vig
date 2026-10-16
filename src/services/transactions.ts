@@ -261,3 +261,51 @@ export async function removeReceipt(txId: string, path: string) {
   await supabase.storage.from('receipts').remove([path]);
   await updateTransaction(txId, { attachment_path: null });
 }
+
+/** Lançamentos de uma conta no período do extrato (para marcar duplicados antes de importar). */
+export async function listAccountTxForImport(ws: string, accountId: string, from: string, to: string) {
+  return unwrapList(
+    await supabase
+      .from('transactions')
+      .select('occurred_on, amount_cents, kind, client_request_id')
+      .eq('workspace_id', ws)
+      .eq('account_id', accountId)
+      .in('kind', ['income', 'expense'])
+      .neq('status', 'cancelled')
+      .gte('occurred_on', from)
+      .lte('occurred_on', to)
+      .limit(5000),
+  ) as Array<Pick<Transaction, 'occurred_on' | 'amount_cents' | 'kind' | 'client_request_id'>>;
+}
+
+/** Descrição → categoria dos lançamentos mais recentes, para sugerir categorias na importação. */
+export async function listCategoryHints(ws: string) {
+  return unwrapList(
+    await supabase
+      .from('transactions')
+      .select('description, category_id, kind')
+      .eq('workspace_id', ws)
+      .in('kind', ['income', 'expense'])
+      .not('category_id', 'is', null)
+      .order('occurred_on', { ascending: false })
+      .limit(2000),
+  ) as Array<Pick<Transaction, 'description' | 'category_id' | 'kind'>>;
+}
+
+/**
+ * Importação em lote. A chave de idempotência de cada linha é derivada do extrato,
+ * então linhas já importadas são ignoradas pelo banco (on conflict do nothing).
+ * Devolve quantos lançamentos foram de fato criados.
+ */
+export async function importTransactions(ws: string, items: Array<TxInput & { client_request_id: string }>, onProgress?: (done: number) => void): Promise<number> {
+  let created = 0;
+  for (let i = 0; i < items.length; i += 200) {
+    const chunk = items.slice(i, i + 200).map((t) => ({ ...t, workspace_id: ws }));
+    const rows = unwrapList(
+      await supabase.from('transactions').upsert(chunk, { onConflict: 'workspace_id,client_request_id', ignoreDuplicates: true }).select('id'),
+    );
+    created += rows.length;
+    onProgress?.(Math.min(items.length, i + 200));
+  }
+  return created;
+}

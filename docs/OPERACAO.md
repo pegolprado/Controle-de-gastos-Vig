@@ -64,7 +64,7 @@ Alternativa via Git: `git revert <commit>` + push em `main` (passa pelo CI).
 | Comprovantes (Storage) | não entram no `pg_dump`. Use a API S3 do Supabase Storage com `rclone sync` para um bucket próprio ou baixe pelo painel | semanal (recomendado) | a definir |
 | Código | Git/GitHub | a cada commit | permanente |
 
-> O plano **gratuito** do Supabase não inclui backups que você possa baixar. Por isso o backup diário pelo GitHub Actions é essencial. Ele também mantém o projeto ativo: projetos gratuitos sem atividade por 7 dias são pausados.
+> O plano **gratuito** do Supabase não inclui backups que você possa baixar. Por isso o backup diário pelo GitHub Actions é essencial. Projetos gratuitos sem atividade por 7 dias são pausados; o workflow `keepalive.yml` faz uma consulta pública por dia para evitar isso, mesmo sem o backup configurado.
 
 Backup manual pelo seu computador:
 
