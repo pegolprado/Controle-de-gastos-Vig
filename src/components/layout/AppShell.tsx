@@ -11,7 +11,7 @@ import { env } from '@/lib/env';
 import { IconButton } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Card';
 import { Logo } from './Logo';
-import { InstallBanner } from '@/pwa/InstallPrompt';
+import { InstallBanner, InstallMenuItem } from '@/pwa/InstallPrompt';
 import { MOBILE_NAV, NAV, NAV_ADMIN, NAV_SECONDARY } from './nav';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
@@ -58,6 +58,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <SideLink key={n.to} {...n} onClick={onNavigate} />
         ))}
         {ctx?.is_app_owner && <SideLink {...NAV_ADMIN} onClick={onNavigate} />}
+        <InstallMenuItem className="flex h-10 items-center gap-3 rounded-xl px-3 text-[14px] font-semibold text-muted transition hover:bg-surface-2/60 hover:text-fg" />
         <button
           type="button"
           onClick={() => void signOut()}

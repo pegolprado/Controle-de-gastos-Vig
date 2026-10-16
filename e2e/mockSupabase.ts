@@ -248,6 +248,7 @@ export async function installMock(page: Page, s: MockState) {
           rows.push(row);
           return row;
         });
+        if (/ignore-duplicates/.test(req.headers()['prefer'] ?? '')) return json(route, items.filter(Boolean), 201);
         if (items.includes(null)) return json(route, { code: '23505', message: 'duplicate key value violates unique constraint "transactions_workspace_id_client_request_id_key"', details: 'client_request_id' }, 409);
         return json(route, single ? items[0] : items, 201);
       }
