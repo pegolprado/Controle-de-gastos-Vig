@@ -23,3 +23,15 @@ if (process.env.SPA_404 === '1') {
   copyFileSync(resolve(dist, 'index.html'), resolve(dist, '404.html'));
   console.log('404.html gerado para hospedagem estática (GitHub Pages).');
 }
+
+// O manifesto (nome/ícone do app instalado) não deve ficar no cache do service
+// worker: assim uma troca de nome ou ícone chega na hora para quem instala.
+const swPath = resolve(dist, 'sw.js');
+if (existsSync(swPath)) {
+  const sw = readFileSync(swPath, 'utf8');
+  const cleaned = sw.replace(/\{url:"manifest\.webmanifest",revision:"[0-9a-f]+"\},?/g, '');
+  if (cleaned !== sw) {
+    writeFileSync(swPath, cleaned);
+    console.log('Manifesto removido do pré-cache do service worker.');
+  }
+}
