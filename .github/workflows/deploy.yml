@@ -22,7 +22,9 @@ concurrency:
 jobs:
   deploy:
     # só publica se o CI passou (testes obrigatórios antes de promover)
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # Opcional: só roda quando o caminho Cloudflare estiver configurado (variável CLOUDFLARE_PROJECT).
+    # Sem ela, a publicação é feita pelo workflow "Publicar no GitHub Pages".
+    if: vars.CLOUDFLARE_PROJECT != '' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     environment: ${{ (github.event.workflow_run.head_branch == 'main' || inputs.environment == 'production') && 'production' || 'staging' }}
     env:
