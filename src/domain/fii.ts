@@ -1,5 +1,5 @@
 /** Regras puras da Renda FII: valores a receber, situação do pagamento e resumos. */
-import { addDays, addMonths, diffDays, makeDate, parseISO, startOfMonth, todayISO, type ISODate } from '@/lib/dates';
+import { addDays, addMonths, diffDays, makeDate, monthLabel, parseISO, startOfMonth, todayISO, type ISODate } from '@/lib/dates';
 import type { FiiDistribution, FiiPosition } from '@/lib/types';
 
 /** "hglg" / "HGLG11 " → "HGLG11"; null se não parecer um código de FII. */
@@ -16,7 +16,7 @@ export function payoutCents(quantity: number, rate: number): number {
   return Math.floor(Math.round(quantity * Number(rate) * 1e6) / 1e4);
 }
 
-export type PayStatus = { tone: 'positive' | 'warning' | 'brand' | 'info'; label: string; paid: boolean };
+export type PayStatus = { tone: 'positive' | 'warning' | 'brand' | 'info' | 'neutral'; label: string; paid: boolean };
 
 export function payStatus(paymentDate: ISODate, today: ISODate = todayISO(), projected = false): PayStatus {
   const d = diffDays(paymentDate, today);
@@ -26,8 +26,9 @@ export function payStatus(paymentDate: ISODate, today: ISODate = todayISO(), pro
     if (d === 1) return { tone: 'info', label: 'Previsto · amanhã', paid: false };
     return { tone: 'info', label: `Previsto · daqui a ${d} dias`, paid: false };
   }
+  // no dia do pagamento o valor já cai na conta da corretora
   if (d < 0) return { tone: 'positive', label: 'Recebido', paid: true };
-  if (d === 0) return { tone: 'brand', label: 'Hoje', paid: false };
+  if (d === 0) return { tone: 'positive', label: 'Recebido hoje', paid: true };
   if (d === 1) return { tone: 'warning', label: 'Amanhã', paid: false };
   return { tone: 'warning', label: `Daqui a ${d} dias`, paid: false };
 }
@@ -70,7 +71,7 @@ function toBusinessDay(iso: ISODate, backwards: boolean): ISODate {
  */
 export function projectNext(payments: FiiPayment[], today: ISODate = todayISO()): FiiPayment | undefined {
   const income = payments.filter((p) => p.dist.kind === 'RENDIMENTO');
-  if (income.length < 3 || income[0]!.dist.payment_date >= today) return undefined;
+  if (income.length < 3 || income[0]!.dist.payment_date > today) return undefined;
   const recent = income.slice(0, 3);
   for (let i = 0; i < recent.length - 1; i++) {
     const gap = diffDays(recent[i]!.dist.payment_date, recent[i + 1]!.dist.payment_date);
@@ -109,15 +110,42 @@ export function projectNext(payments: FiiPayment[], today: ISODate = todayISO())
 
 /** Próximo pagamento (anunciado ou previsto) e o último recebido de uma posição. */
 export function nextAndLast(payments: FiiPayment[], today: ISODate = todayISO()): { next?: FiiPayment; last?: FiiPayment } {
-  const upcoming = payments.filter((p) => p.dist.payment_date >= today);
-  const last = payments.find((p) => p.dist.payment_date < today);
+  const upcoming = payments.filter((p) => p.dist.payment_date > today);
+  const last = payments.find((p) => p.dist.payment_date <= today);
   return { next: upcoming.length ? upcoming[upcoming.length - 1] : projectNext(payments, today), last };
 }
 
-/** O pagamento a destacar: o próximo (anunciado ou previsto) ou, se não houver, o último recebido. */
-export function featuredPayment(payments: FiiPayment[], today: ISODate = todayISO()): FiiPayment | undefined {
+export type MonthMode = 'upcoming' | 'received' | 'next' | 'none';
+
+/**
+ * Visão do mês vigente para um fundo:
+ * - 'upcoming': ainda vai cair neste mês (anunciado ou previsto) → contagem de dias;
+ * - 'received': já caiu neste mês → "Recebido";
+ * - 'next': nada neste mês; o próximo é no mês seguinte (a contagem começa na virada);
+ * - 'none': sem anúncio nem previsão.
+ */
+export function monthView(payments: FiiPayment[], today: ISODate = todayISO()): { mode: MonthMode; featured?: FiiPayment; last?: FiiPayment } {
+  const monthStart = startOfMonth(today);
+  const nextMonth = addMonths(monthStart, 1);
   const { next, last } = nextAndLast(payments, today);
-  return next ?? last;
+  const paidThisMonth = last && last.dist.payment_date >= monthStart ? last : undefined;
+  if (next && next.dist.payment_date < nextMonth && !(next.projected && paidThisMonth)) return { mode: 'upcoming', featured: next, last };
+  if (paidThisMonth) return { mode: 'received', featured: paidThisMonth, last };
+  if (next) return { mode: 'next', featured: next, last };
+  return { mode: 'none', featured: last, last };
+}
+
+/** Selo do cartão: contagem só no mês vigente; pagamento do mês seguinte mostra só o mês. */
+export function monthStatus(mode: MonthMode, featured: FiiPayment | undefined, today: ISODate = todayISO()): PayStatus | null {
+  if (!featured) return null;
+  if (mode === 'next') return { tone: 'neutral', label: `Em ${monthLabel(featured.dist.payment_date, { year: false })}`, paid: false };
+  if (mode === 'none') return { tone: 'neutral', label: 'Sem anúncio', paid: true };
+  return payStatus(featured.dist.payment_date, today, featured.projected);
+}
+
+/** O pagamento a destacar no cartão (ver monthView). */
+export function featuredPayment(payments: FiiPayment[], today: ISODate = todayISO()): FiiPayment | undefined {
+  return monthView(payments, today).featured;
 }
 
 export interface FiiSummary {
@@ -135,7 +163,7 @@ export interface FiiSummary {
 export function summarize(all: FiiPayment[], today: ISODate = todayISO(), projected: FiiPayment[] = []): FiiSummary {
   const monthStart = startOfMonth(today);
   const from12 = addMonths(monthStart, -11);
-  const upcoming = all.filter((p) => p.dist.payment_date >= today).sort((a, b) => a.dist.payment_date.localeCompare(b.dist.payment_date));
+  const upcoming = all.filter((p) => p.dist.payment_date > today).sort((a, b) => a.dist.payment_date.localeCompare(b.dist.payment_date));
   const months = Array.from({ length: 12 }, (_, i) => ({ month: addMonths(from12, i), cents: 0 }));
   let last12 = 0;
   let thisMonth = 0;

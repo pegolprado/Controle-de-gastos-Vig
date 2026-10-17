@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Building2, CalendarPlus, ChevronDown, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
@@ -14,13 +14,13 @@ import { MoneyInput } from '@/components/ui/MoneyInput';
 import { Segmented } from '@/components/ui/Segmented';
 import { useConfirm } from '@/components/ui/Confirm';
 import { cn } from '@/lib/cn';
-import { capitalize, formatDate, formatDateTime, monthLabel, todayISO } from '@/lib/dates';
+import { addMonths, capitalize, formatDate, formatDateTime, monthLabel, startOfMonth, todayISO } from '@/lib/dates';
 import { formatBRL, formatPercent } from '@/lib/money';
 import { errorMessage } from '@/lib/errors';
 import { stableUUID } from '@/lib/id';
 import { invalidateFinance, queryClient } from '@/lib/queryClient';
 import type { FiiFund, FiiPosition } from '@/lib/types';
-import { baseCode, nextAndLast, normalizeTicker, paymentsFor, payStatus, summarize, yieldOnCost, type FiiPayment } from '@/domain/fii';
+import { baseCode, monthStatus, monthView, normalizeTicker, paymentsFor, payStatus, summarize, yieldOnCost, type FiiPayment, type MonthMode } from '@/domain/fii';
 import { deleteFiiPosition, listFiiMarket, listFiiPositions, saveFiiPosition, syncFii, type FiiSyncResult } from '@/services/fii';
 import { importTransactions, listByRequestIds } from '@/services/transactions';
 
@@ -28,6 +28,23 @@ const fmtRate = (rate: number) => `R$ ${rate.toLocaleString('pt-BR', { minimumFr
 
 /** Chave de idempotência do lançamento de um provento (lançar duas vezes não duplica). */
 const launchId = (ws: string, p: FiiPayment) => stableUUID(`finance-mv-fii|${ws}|${p.ticker}|${p.dist.isin}|${p.dist.kind}|${p.dist.payment_date}`);
+
+/** Data de hoje que se atualiza sozinha na virada do dia (app aberto ou voltando do segundo plano). */
+function useToday() {
+  const [today, setToday] = useState(todayISO);
+  useEffect(() => {
+    const check = () => setToday((t) => (t === todayISO() ? t : todayISO()));
+    const id = window.setInterval(check, 60_000);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, []);
+  return today;
+}
+
+const MODE_ORDER: Record<MonthMode, number> = { upcoming: 0, received: 1, next: 2, none: 3 };
 
 export default function FiiPage() {
   const ws = useWsId();
@@ -51,7 +68,7 @@ export default function FiiPage() {
     },
   });
 
-  const today = todayISO();
+  const today = useToday();
   const fundMap = useMemo(() => new Map<string, FiiFund>((market.data?.funds ?? []).map((f) => [f.code, f])), [market.data]);
   // cartões ordenados pelo próximo pagamento (anunciado ou previsto): o que cai antes aparece primeiro
   const byPosition = useMemo(
@@ -59,19 +76,28 @@ export default function FiiPage() {
       (positions.data ?? [])
         .map((p) => {
           const payments = paymentsFor(p, market.data?.dists ?? []);
-          return { position: p, payments, ...nextAndLast(payments, today) };
+          return { position: p, payments, ...monthView(payments, today) };
         })
-        .sort((a, b) => (a.next?.dist.payment_date ?? '9999').localeCompare(b.next?.dist.payment_date ?? '9999') || a.position.ticker.localeCompare(b.position.ticker)),
+        // a cair neste mês (mais perto primeiro) → recebidos no mês → próximo mês → sem anúncio
+        .sort((a, b) => {
+          const byMode = MODE_ORDER[a.mode] - MODE_ORDER[b.mode];
+          if (byMode) return byMode;
+          const da = a.featured?.dist.payment_date ?? '9999';
+          const db = b.featured?.dist.payment_date ?? '9999';
+          return (a.mode === 'received' ? db.localeCompare(da) : da.localeCompare(db)) || a.position.ticker.localeCompare(b.position.ticker);
+        }),
     [positions.data, market.data, today],
   );
   const summary = useMemo(
-    () => summarize(byPosition.flatMap((x) => x.payments), today, byPosition.flatMap((x) => (x.next?.projected ? [x.next] : []))),
+    () => summarize(byPosition.flatMap((x) => x.payments), today, byPosition.flatMap((x) => (x.featured?.projected ? [x.featured] : []))),
     [byPosition, today],
   );
-  const agenda = useMemo(
-    () => [...summary.upcoming, ...summary.projected].sort((a, b) => a.dist.payment_date.localeCompare(b.dist.payment_date) || a.ticker.localeCompare(b.ticker)),
-    [summary],
-  );
+  // a cair neste mês e, depois, os do mês seguinte (sem contagem até a virada)
+  const thisMonth = byPosition.filter((x) => x.mode === 'upcoming').map((x) => x.featured!);
+  const nextMonth = byPosition.filter((x) => x.mode === 'next').map((x) => x.featured!).sort((a, b) => a.dist.payment_date.localeCompare(b.dist.payment_date));
+  const thisMonthCents = thisMonth.reduce((s, p) => s + p.amount_cents, 0);
+  const thisMonthProjected = thisMonth.filter((p) => p.projected).reduce((s, p) => s + p.amount_cents, 0);
+  const agenda = [...thisMonth, ...nextMonth];
 
   // proventos futuros já lançados como receita
   const upcomingIds = useQuery({
@@ -148,7 +174,13 @@ export default function FiiPage() {
       ) : (
         <>
           <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Resumo dos rendimentos">
-            <Stat label="A receber (anunciado)" cents={summary.upcoming_cents} tone="warning" loading={loading} footer={`${summary.upcoming.length} ${summary.upcoming.length === 1 ? 'pagamento' : 'pagamentos'}${summary.projected_cents ? ` · + ${formatBRL(summary.projected_cents)} previstos` : ''}`} />
+            <Stat
+              label="A receber este mês"
+              cents={thisMonthCents}
+              tone="warning"
+              loading={loading}
+              footer={`${thisMonth.length} ${thisMonth.length === 1 ? 'fundo' : 'fundos'}${thisMonthProjected ? ` · ${formatBRL(thisMonthProjected)} previsto` : ''}`}
+            />
             <Stat label="Recebido este mês" cents={summary.this_month_cents} tone="positive" loading={loading} />
             <Stat label="Últimos 12 meses" cents={summary.last12_cents} tone="positive" loading={loading} />
             <Stat label="Média mensal" cents={summary.monthly_avg_cents} tone="neutral" loading={loading} footer="nos meses com pagamento" />
@@ -171,15 +203,17 @@ export default function FiiPage() {
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               {loading
                 ? [0, 1].map((i) => <Skeleton key={i} className="h-40" />)
-                : list.map(({ position, payments, next, last }) => (
+                : list.map(({ position, payments, mode, featured, last }) => (
                     <PositionCard
                       key={position.id}
                       position={position}
                       fund={fundMap.get(baseCode(position.ticker))}
                       status={market.data?.status.get(baseCode(position.ticker))}
                       payments={payments}
-                      next={next}
+                      mode={mode}
+                      featured={featured}
                       last={last}
+                      today={today}
                       launched={isLaunched}
                       canEdit={canEdit}
                       canLaunch={canContribute}
@@ -201,7 +235,7 @@ export default function FiiPage() {
                 <>
                   <ul className="divide-y divide-line">
                     {agenda.map((p) => {
-                      const st = payStatus(p.dist.payment_date, today, p.projected);
+                      const st = monthStatus(p.dist.payment_date < startOfMonth(addMonths(today, 1)) ? 'upcoming' : 'next', p, today)!;
                       return (
                         <li key={`${p.ticker}${p.dist.payment_date}${p.dist.kind}${p.dist.isin}`} className="flex items-center gap-3 px-5 py-3.5">
                           <div className="min-w-0 flex-1">
@@ -247,7 +281,7 @@ export default function FiiPage() {
           )}
 
           <p className="mt-5 text-[12px] leading-relaxed text-subtle">
-            Fonte: B3 (consulta pública de fundos listados), atualizada a cada 6 horas. <strong>Previsto</strong> = o fundo ainda não anunciou; data e valor estimados pelo histórico (dia em que costuma pagar e último valor por cota), substituídos pelo anúncio oficial assim que sair. Os valores usam a quantidade de cotas cadastrada hoje: você recebe se tinha as cotas no fim do pregão da <strong>data com</strong>. Não é recomendação de investimento.
+            Cada fundo mostra o pagamento do mês vigente: já pago = <strong>Recebido</strong> (no próprio dia do pagamento); ainda a cair = contagem de dias. Na virada do mês, todos voltam a contar os dias até o próximo. Fonte: B3 (consulta pública de fundos listados), atualizada a cada 6 horas. <strong>Previsto</strong> = o fundo ainda não anunciou; data e valor estimados pelo histórico (dia em que costuma pagar e último valor por cota), substituídos pelo anúncio oficial assim que sair. Os valores usam a quantidade de cotas cadastrada hoje: você recebe se tinha as cotas no fim do pregão da <strong>data com</strong>. Não é recomendação de investimento.
           </p>
         </>
       )}
@@ -295,8 +329,10 @@ function PositionCard({
   fund,
   status,
   payments,
-  next,
+  mode,
+  featured,
   last,
+  today,
   launched,
   canEdit,
   canLaunch,
@@ -308,8 +344,10 @@ function PositionCard({
   fund?: FiiFund;
   status?: FiiSyncResult;
   payments: FiiPayment[];
-  next?: FiiPayment;
+  mode: MonthMode;
+  featured?: FiiPayment;
   last?: FiiPayment;
+  today: string;
   launched: (p: FiiPayment) => boolean;
   canEdit: boolean;
   canLaunch: boolean;
@@ -318,10 +356,8 @@ function PositionCard({
   onLaunch: (p: FiiPayment) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const today = todayISO();
-  const featured = next ?? last;
   const projected = !!featured?.projected;
-  const st = featured ? payStatus(featured.dist.payment_date, today, projected) : null;
+  const st = monthStatus(mode, featured, today);
   const yoc = featured ? yieldOnCost(featured.dist.rate, position.avg_price_cents) : null;
 
   return (
@@ -335,10 +371,11 @@ function PositionCard({
               {projected ? 'Previsto' : 'Rendimento'}: {fmtRate(featured.dist.rate)} <span className="text-[13px] text-subtle">por cota</span>
             </p>
           )}
-          {featured && st && !st.paid && (
+          {featured && (
             <p className="text-[13px] text-subtle">
-              {projected ? 'Deve cair em' : 'Cai em'} <strong className="font-semibold text-fg">{formatDate(featured.dist.payment_date)}</strong>
-              {last && featured !== last && <> · último: <Money cents={last.amount_cents} /> em {formatDate(last.dist.payment_date)}</>}
+              {mode === 'received' || mode === 'none' ? 'Caiu em' : projected ? 'Deve cair em' : 'Cai em'}{' '}
+              <strong className="font-semibold text-fg">{formatDate(featured.dist.payment_date)}</strong>
+              {mode !== 'received' && mode !== 'none' && last && <> · último: <Money cents={last.amount_cents} /> em {formatDate(last.dist.payment_date)}</>}
             </p>
           )}
         </div>
@@ -346,8 +383,8 @@ function PositionCard({
           {featured && st ? (
             <>
               {projected && <span className="-mb-2 text-[11px] font-semibold uppercase tracking-wide text-info">previsto</span>}
-              <Money cents={featured.amount_cents} className={cn('font-num text-2xl font-bold', st.paid ? 'text-positive' : projected ? 'text-info' : 'text-warning')} />
-              <Badge tone={st.tone} className="px-3 py-1 text-[13px] uppercase tracking-wide">{st.label.replace('Previsto · ', '')}</Badge>
+              <Money cents={featured.amount_cents} className={cn('font-num text-2xl font-bold', mode === 'received' ? 'text-positive' : mode === 'next' || mode === 'none' ? 'text-muted' : projected ? 'text-info' : 'text-warning')} />
+              <Badge tone={st.tone} className="px-3 py-1 text-[13px] uppercase tracking-wide">{capitalize(st.label.replace('Previsto · ', ''))}</Badge>
             </>
           ) : (
             <Badge tone="neutral">{status === 'not_found' ? 'Não encontrado na B3' : status === 'unavailable' ? 'B3 indisponível' : 'Sem anúncios'}</Badge>

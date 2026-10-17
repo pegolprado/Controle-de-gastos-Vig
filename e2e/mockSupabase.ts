@@ -78,12 +78,14 @@ export function createState(opts: { withData?: boolean; isOwner?: boolean } = {}
         { code: 'BRCO', name: 'FII BRESCO', administrator: 'OLIVEIRA TRUST', not_found: false, synced_at: new Date().toISOString() },
         { code: 'XPML', name: 'FII XP MALLS', administrator: 'XP INVESTIMENTOS', not_found: false, synced_at: new Date().toISOString() },
       ],
+      // datas fixas: o teste da Renda FII congela o relógio do navegador em 17/10/2026
       fii_distributions: [
-        { code: 'HSML', isin: 'BRHSMLCTF007', kind: 'RENDIMENTO', record_date: addDays(-17), payment_date: addDays(-10), approved_on: addDays(-17), rate: 0.75, related_to: 'Setembro/2026' },
-        { code: 'HSML', isin: 'BRHSMLCTF007', kind: 'RENDIMENTO', record_date: addDays(-47), payment_date: addDays(-40), approved_on: addDays(-47), rate: 0.75, related_to: 'Agosto/2026' },
-        { code: 'BRCO', isin: 'BRBRCOCTF007', kind: 'RENDIMENTO', record_date: addDays(-17), payment_date: addDays(2), approved_on: addDays(-17), rate: 0.91, related_to: 'SETEMBRO/2026' },
-        // XPML: paga todo mês, mas o deste mês ainda não foi anunciado → previsão
-        ...[-22, -52, -83].map((n) => ({ code: 'XPML', isin: 'BRXPMLCTF000', kind: 'RENDIMENTO', record_date: addDays(n - 7), payment_date: addDays(n), approved_on: addDays(n - 7), rate: 0.92, related_to: null })),
+        { code: 'HSML', isin: 'BRHSMLCTF007', kind: 'RENDIMENTO', record_date: '2026-09-30', payment_date: '2026-10-07', approved_on: '2026-09-30', rate: 0.75, related_to: 'Setembro/2026' },
+        { code: 'HSML', isin: 'BRHSMLCTF007', kind: 'RENDIMENTO', record_date: '2026-08-31', payment_date: '2026-09-08', approved_on: '2026-08-31', rate: 0.75, related_to: 'Agosto/2026' },
+        { code: 'BRCO', isin: 'BRBRCOCTF007', kind: 'RENDIMENTO', record_date: '2026-09-30', payment_date: '2026-10-19', approved_on: '2026-09-30', rate: 0.91, related_to: 'SETEMBRO/2026' },
+        { code: 'BRCO', isin: 'BRBRCOCTF007', kind: 'RENDIMENTO', record_date: '2026-08-31', payment_date: '2026-09-15', approved_on: '2026-08-31', rate: 0.91, related_to: 'AGOSTO/2026' },
+        // XPML: paga todo dia 25 (antecipa quando cai no fim de semana); outubro ainda não anunciado → previsão
+        ...['2026-09-25', '2026-08-25', '2026-07-24'].map((d) => ({ code: 'XPML', isin: 'BRXPMLCTF000', kind: 'RENDIMENTO', record_date: null, payment_date: d, approved_on: null, rate: 0.92, related_to: null })),
       ],
     },
     isOwner: Boolean(opts.isOwner),

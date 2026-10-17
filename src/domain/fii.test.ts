@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { featuredPayment, nextAndLast, normalizeTicker, payoutCents, paymentsFor, payStatus, projectNext, summarize, yieldOnCost } from './fii';
+import { featuredPayment, monthStatus, monthView, nextAndLast, normalizeTicker, payoutCents, paymentsFor, payStatus, projectNext, summarize, yieldOnCost } from './fii';
 import type { FiiDistribution, FiiPosition } from '@/lib/types';
 
 const pos = (ticker: string, quantity: number): FiiPosition => ({ id: ticker, workspace_id: 'w', ticker, quantity, avg_price_cents: null, created_at: '' });
@@ -23,7 +23,7 @@ describe('Renda FII', () => {
 
   it('situação do pagamento', () => {
     expect(payStatus('2026-10-15', '2026-10-17').label).toBe('Recebido');
-    expect(payStatus('2026-10-17', '2026-10-17').label).toBe('Hoje');
+    expect(payStatus('2026-10-17', '2026-10-17')).toMatchObject({ label: 'Recebido hoje', paid: true });
     expect(payStatus('2026-10-18', '2026-10-17').label).toBe('Amanhã');
     expect(payStatus('2026-10-19', '2026-10-17').label).toBe('Daqui a 2 dias');
   });
@@ -32,8 +32,11 @@ describe('Renda FII', () => {
     const d = [dist('HSML', '2026-09-08', 0.75), dist('HSML', '2026-10-07', 0.75), dist('HSML', '2026-11-07', 0.8), dist('HSML', '2026-12-07', 0.8), dist('BRCO', '2026-10-15', 0.91)];
     const p = paymentsFor(pos('HSML11', 10), d);
     expect(p.map((x) => x.dist.payment_date)).toEqual(['2026-12-07', '2026-11-07', '2026-10-07', '2026-09-08']);
-    expect(featuredPayment(p, '2026-10-17')?.dist.payment_date).toBe('2026-11-07');
-    expect(featuredPayment(p, '2026-12-08')).toMatchObject({ projected: true, dist: { payment_date: '2027-01-07' } });
+    // já pagou em 07/10 (mês vigente): fica Recebido, o de novembro conta a partir da virada
+    expect(featuredPayment(p, '2026-10-17')?.dist.payment_date).toBe('2026-10-07');
+    expect(featuredPayment(p, '2026-11-01')?.dist.payment_date).toBe('2026-11-07');
+    expect(featuredPayment(p, '2026-12-08')?.dist.payment_date).toBe('2026-12-07');
+    expect(featuredPayment(p, '2027-01-02')).toMatchObject({ projected: true, dist: { payment_date: '2027-01-07' } });
   });
 
   it('resume a receber, mês atual, 12 meses e média', () => {
@@ -95,5 +98,52 @@ describe('previsão de rendimentos ainda não anunciados', () => {
     const s = summarize(p, '2026-10-17', [projectNext(p, '2026-10-17')!]);
     expect(s.upcoming_cents).toBe(0);
     expect(s.projected_cents).toBe(920);
+  });
+});
+
+describe('visão do mês vigente', () => {
+  const monthly = (code: string, day: string, rate: number, months = ['2026-07', '2026-08', '2026-09', '2026-10']) =>
+    months.map((m) => dist(code, `${m}-${day}`, rate));
+
+  it('já pago neste mês → Recebido (sem contar dias até o mês seguinte)', () => {
+    // HGLG11 pagou 15/10; hoje 17/10
+    const p = paymentsFor(pos('HGLG11', 1), monthly('HGLG', '15', 1.17));
+    const v = monthView(p, '2026-10-17');
+    expect(v.mode).toBe('received');
+    expect(v.featured?.dist.payment_date).toBe('2026-10-15');
+    expect(monthStatus(v.mode, v.featured, '2026-10-17')?.label).toBe('Recebido');
+  });
+
+  it('ainda vai cair neste mês → contagem de dias (anunciado ou previsto)', () => {
+    const xpml = paymentsFor(pos('XPML11', 10), monthly('XPML', '25', 0.92, ['2026-07', '2026-08', '2026-09']));
+    const v = monthView(xpml, '2026-10-17');
+    expect(v.mode).toBe('upcoming');
+    expect(v.featured?.projected).toBe(true);
+    // sem histórico de fim de semana: 25/10 (domingo) → segunda 26/10
+    expect(monthStatus(v.mode, v.featured, '2026-10-17')?.label).toBe('Previsto · daqui a 9 dias');
+    const brco = paymentsFor(pos('BRCO11', 22), [...monthly('BRCO', '15', 0.91, ['2026-08', '2026-09']), dist('BRCO', '2026-10-19', 0.91)]);
+    expect(monthStatus('upcoming', monthView(brco, '2026-10-17').featured, '2026-10-17')?.label).toBe('Daqui a 2 dias');
+  });
+
+  it('no dia do pagamento vira Recebido', () => {
+    const p = paymentsFor(pos('BRCO11', 22), [dist('BRCO', '2026-09-15', 0.91), dist('BRCO', '2026-10-19', 0.91)]);
+    const v = monthView(p, '2026-10-19');
+    expect(v.mode).toBe('received');
+    expect(monthStatus(v.mode, v.featured, '2026-10-19')?.label).toBe('Recebido hoje');
+  });
+
+  it('na virada do mês todos voltam a contar os dias', () => {
+    const p = paymentsFor(pos('HGLG11', 1), monthly('HGLG', '15', 1.17));
+    const v = monthView(p, '2026-11-01');
+    expect(v.mode).toBe('upcoming');
+    expect(v.featured?.dist.payment_date).toBe('2026-11-16'); // 15/11/2026 é domingo
+    expect(monthStatus(v.mode, v.featured, '2026-11-01')?.label).toBe('Previsto · daqui a 15 dias');
+  });
+
+  it('anúncio para o mês seguinte sem pagamento neste mês → mostra só o mês', () => {
+    const p = paymentsFor(pos('ABCD11', 5), [dist('ABCD', '2026-09-30', 1), dist('ABCD', '2026-11-03', 1)]);
+    const v = monthView(p, '2026-10-17');
+    expect(v.mode).toBe('next');
+    expect(monthStatus(v.mode, v.featured, '2026-10-17')?.label).toBe('Em novembro');
   });
 });
