@@ -72,6 +72,16 @@ export function createState(opts: { withData?: boolean; isOwner?: boolean } = {}
       tx_settlements: [],
       tx_due_changes: [],
       audit_log: [],
+      fii_positions: [],
+      fii_funds: [
+        { code: 'HSML', name: 'FII HSI MALL', administrator: 'BRL TRUST', not_found: false, synced_at: new Date().toISOString() },
+        { code: 'BRCO', name: 'FII BRESCO', administrator: 'OLIVEIRA TRUST', not_found: false, synced_at: new Date().toISOString() },
+      ],
+      fii_distributions: [
+        { code: 'HSML', isin: 'BRHSMLCTF007', kind: 'RENDIMENTO', record_date: addDays(-17), payment_date: addDays(-10), approved_on: addDays(-17), rate: 0.75, related_to: 'Setembro/2026' },
+        { code: 'HSML', isin: 'BRHSMLCTF007', kind: 'RENDIMENTO', record_date: addDays(-47), payment_date: addDays(-40), approved_on: addDays(-47), rate: 0.75, related_to: 'Agosto/2026' },
+        { code: 'BRCO', isin: 'BRBRCOCTF007', kind: 'RENDIMENTO', record_date: addDays(-17), payment_date: addDays(2), approved_on: addDays(-17), rate: 0.91, related_to: 'SETEMBRO/2026' },
+      ],
     },
     isOwner: Boolean(opts.isOwner),
     failNextInsert: false,
@@ -201,6 +211,8 @@ export async function installMock(page: Page, s: MockState) {
             workspaces: [{ id: WS, name: 'Pessoal', kind: 'personal', role: 'owner', is_support: false, expires_at: null, owner_id: USER }],
             preferences: { user_id: USER, theme: 'system', active_workspace_id: WS, hide_values: false, budget_alerts: true, due_alerts: true },
           });
+        case 'fii_sync':
+          return json(route, s.tables.fii_funds.some((f) => f.code === String(a.p_ticker).slice(0, 4)) ? 'cached' : 'not_found');
         case 'generate_recurrences':
         case 'refresh_notifications':
           return json(route, 0);

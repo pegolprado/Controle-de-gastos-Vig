@@ -309,3 +309,11 @@ export async function importTransactions(ws: string, items: Array<TxInput & { cl
   }
   return created;
 }
+
+/** Lançamentos com estas chaves de idempotência (para saber o que já foi lançado). */
+export async function listByRequestIds(ws: string, ids: string[]) {
+  if (!ids.length) return [];
+  return unwrapList(
+    await supabase.from('transactions').select('id, client_request_id').eq('workspace_id', ws).in('client_request_id', ids),
+  ) as Array<Pick<Transaction, 'id' | 'client_request_id'>>;
+}
