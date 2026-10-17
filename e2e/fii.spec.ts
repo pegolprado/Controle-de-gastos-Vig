@@ -25,6 +25,8 @@ test('Renda FII: código + quantidade mostram quanto e quando recebo, e lançam 
   await add('hsml', '24');
   await expect(page.getByText('HSML11 adicionado à carteira.')).toBeVisible();
   await add('BRCO11', '22');
+  await add('XPML11', '10');
+  await expect(page.getByRole('dialog', { name: 'Adicionar fundo' })).toBeHidden();
   const wrong = await add('XXXX11', '5');
   await expect(wrong.getByRole('alert')).toContainText('Não encontramos XXXX11');
   await wrong.getByRole('button', { name: 'Cancelar' }).click();
@@ -35,12 +37,21 @@ test('Renda FII: código + quantidade mostram quanto e quando recebo, e lançam 
   await expect(page.getByText('R$ 20,02').first()).toBeVisible();
   await expect(page.getByText('Daqui a 2 dias')).toBeVisible();
   await expect(page.getByText('Rendimento: R$ 0,91')).toBeVisible();
+  // XPML11 ainda não anunciou: previsão pelo histórico, com contagem de dias
+  await expect(page.getByText(/^(daqui a \d+ dias|amanhã|hoje|aguardando anúncio)$/i).first()).toBeVisible();
+  await expect(page.getByText('previsto', { exact: true })).toBeVisible();
+  await expect(page.getByText('Previsto: R$ 0,92')).toBeVisible();
+  await expect(page.getByText(/Deve cair em/)).toBeVisible();
+  // o que cai antes vem primeiro: BRCO11 (daqui a 2 dias) antes de HSML11 (já recebido, sem previsão suficiente)
+  const tickers = await page.locator('p.font-display').allInnerTexts();
+  expect(tickers[0]).toBe('BRCO11');
 
   await page.getByRole('button', { name: 'Mais detalhes' }).first().click();
   await expect(page.getByText('Data com', { exact: true })).toBeVisible();
   await page.screenshot({ path: `e2e-screens/fii-${test.info().project.name}.png`, fullPage: true });
 
   await page.getByRole('radio', { name: 'Próximos pagamentos' }).click();
+  await expect(page.getByText(/ainda não anunciado/)).toBeVisible();
   await page.getByRole('button', { name: 'Lançar como receitas' }).click();
   const launch = page.getByRole('dialog', { name: 'Lançar como receita' });
   await launch.getByRole('button', { name: /Lançar/ }).click();
