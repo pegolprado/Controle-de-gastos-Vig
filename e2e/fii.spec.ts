@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { createState, installMock } from './mockSupabase';
 
 test('Renda FII: código + quantidade mostram quanto e quando recebo, e lançam a receita', async ({ page }) => {
+  await page.clock.setFixedTime(new Date(2026, 9, 17, 12, 0, 0)); // 17/10/2026, como no relato do usuário
   const state = createState({ withData: true });
   await installMock(page, state);
   await page.goto('/entrar');
@@ -33,18 +34,18 @@ test('Renda FII: código + quantidade mostram quanto e quando recebo, e lançam 
 
   // como no exemplo: HSML11 R$ 18,00 recebido; BRCO11 R$ 20,02 daqui a 2 dias
   await expect(page.getByText('R$ 18,00').first()).toBeVisible();
-  await expect(page.getByText('Recebido', { exact: true })).toBeVisible();
+  await expect(page.locator('span').getByText('Recebido', { exact: true })).toBeVisible();
   await expect(page.getByText('R$ 20,02').first()).toBeVisible();
   await expect(page.getByText('Daqui a 2 dias')).toBeVisible();
   await expect(page.getByText('Rendimento: R$ 0,91')).toBeVisible();
   // XPML11 ainda não anunciou: previsão pelo histórico, com contagem de dias
-  await expect(page.getByText(/^(daqui a \d+ dias|amanhã|hoje|aguardando anúncio)$/i).first()).toBeVisible();
+  await expect(page.getByText('Daqui a 6 dias', { exact: true })).toBeVisible(); // XPML previsto para 23/10
   await expect(page.getByText('previsto', { exact: true })).toBeVisible();
   await expect(page.getByText('Previsto: R$ 0,92')).toBeVisible();
   await expect(page.getByText(/Deve cair em/)).toBeVisible();
-  // o que cai antes vem primeiro: BRCO11 (daqui a 2 dias) antes de HSML11 (já recebido, sem previsão suficiente)
-  const tickers = await page.locator('p.font-display').allInnerTexts();
-  expect(tickers[0]).toBe('BRCO11');
+  // ordem: a cair neste mês (mais perto primeiro) e depois os já recebidos no mês
+  expect(await page.locator('p.font-display').allInnerTexts()).toEqual(['BRCO11', 'XPML11', 'HSML11']);
+  await expect(page.getByText('Caiu em 07/10/2026')).toBeVisible();
 
   await page.getByRole('button', { name: 'Mais detalhes' }).first().click();
   await expect(page.getByText('Data com', { exact: true })).toBeVisible();
