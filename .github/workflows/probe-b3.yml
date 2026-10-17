@@ -1,0 +1,21 @@
+name: Sonda B3 (temporário)
+on:
+  push:
+    branches: [claude/finance-os-app-768to0]
+    paths: [.github/workflows/probe-b3.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          b() { printf '%s' "$1" | base64 -w0; }
+          U=https://sistemaswebb3-listados.b3.com.br/fundsProxy/fundsCall
+          get() { echo "=== $1 $2"; curl -sS -m 30 -A 'Mozilla/5.0' "$U/$1/$(b "$2")" | head -c 2500; echo; }
+          get GetListedFundsSIG '{"typeFund":7,"pageNumber":1,"pageSize":3}'
+          get GetDetailFundSIG '{"typeFund":7,"identifierFund":"HSML"}'
+          get GetListedSupplementFunds '{"cnpj":"0","identifierFund":"HSML","typeFund":7}'
+          get GetListedSupplementFunds '{"cnpj":"0","identifierFund":"BRCO","typeFund":7}'
+          echo "=== total"; curl -sS -m 30 -A 'Mozilla/5.0' "$U/GetListedFundsSIG/$(b '{"typeFund":7,"pageNumber":1,"pageSize":120}')" | head -c 600; echo
