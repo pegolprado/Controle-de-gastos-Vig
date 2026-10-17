@@ -76,11 +76,14 @@ export function createState(opts: { withData?: boolean; isOwner?: boolean } = {}
       fii_funds: [
         { code: 'HSML', name: 'FII HSI MALL', administrator: 'BRL TRUST', not_found: false, synced_at: new Date().toISOString() },
         { code: 'BRCO', name: 'FII BRESCO', administrator: 'OLIVEIRA TRUST', not_found: false, synced_at: new Date().toISOString() },
+        { code: 'XPML', name: 'FII XP MALLS', administrator: 'XP INVESTIMENTOS', not_found: false, synced_at: new Date().toISOString() },
       ],
       fii_distributions: [
         { code: 'HSML', isin: 'BRHSMLCTF007', kind: 'RENDIMENTO', record_date: addDays(-17), payment_date: addDays(-10), approved_on: addDays(-17), rate: 0.75, related_to: 'Setembro/2026' },
         { code: 'HSML', isin: 'BRHSMLCTF007', kind: 'RENDIMENTO', record_date: addDays(-47), payment_date: addDays(-40), approved_on: addDays(-47), rate: 0.75, related_to: 'Agosto/2026' },
         { code: 'BRCO', isin: 'BRBRCOCTF007', kind: 'RENDIMENTO', record_date: addDays(-17), payment_date: addDays(2), approved_on: addDays(-17), rate: 0.91, related_to: 'SETEMBRO/2026' },
+        // XPML: paga todo mês, mas o deste mês ainda não foi anunciado → previsão
+        ...[-22, -52, -83].map((n) => ({ code: 'XPML', isin: 'BRXPMLCTF000', kind: 'RENDIMENTO', record_date: addDays(n - 7), payment_date: addDays(n), approved_on: addDays(n - 7), rate: 0.92, related_to: null })),
       ],
     },
     isOwner: Boolean(opts.isOwner),
