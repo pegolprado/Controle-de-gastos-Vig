@@ -4,6 +4,7 @@
  */
 import { parseBRL } from './money';
 import { isValidISO, type ISODate } from './dates';
+import { stableUUID } from './id';
 
 export interface StatementLine {
   date: ISODate;
@@ -231,12 +232,7 @@ export async function statementRequestIds(accountId: string, lines: StatementLin
     const base = l.bank_id ? `id|${l.bank_id}` : `row|${l.date}|${l.amount_cents}|${strip(l.description)}`;
     const n = (seen.get(base) ?? 0) + 1;
     seen.set(base, n);
-    const data = new TextEncoder().encode(`finance-mv-import|${accountId}|${base}|${l.bank_id ? 1 : n}`);
-    const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', data)).slice(0, 16);
-    hash[6] = (hash[6]! & 0x0f) | 0x50; // versão 5 (baseado em nome)
-    hash[8] = (hash[8]! & 0x3f) | 0x80;
-    const h = [...hash].map((x) => x.toString(16).padStart(2, '0')).join('');
-    ids.push(`${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`);
+    ids.push(await stableUUID(`finance-mv-import|${accountId}|${base}|${l.bank_id ? 1 : n}`));
   }
   return ids;
 }

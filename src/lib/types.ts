@@ -274,3 +274,31 @@ export interface Invite {
   accepted_at: string | null;
   revoked_at: string | null;
 }
+
+export interface FiiPosition {
+  id: string;
+  workspace_id: string;
+  ticker: string;
+  quantity: number;
+  avg_price_cents: number | null;
+  created_at: string;
+}
+
+export interface FiiFund {
+  code: string;
+  name: string | null;
+  administrator: string | null;
+  not_found: boolean;
+  synced_at: string;
+}
+
+export interface FiiDistribution {
+  code: string;
+  isin: string;
+  kind: string;
+  record_date: string | null;
+  payment_date: string;
+  approved_on: string | null;
+  rate: number;
+  related_to: string | null;
+}

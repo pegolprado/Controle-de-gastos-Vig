@@ -2841,6 +2841,8 @@ begin
   v_url := 'https://sistemaswebb3-listados.b3.com.br/fundsProxy/fundsCall/GetListedSupplementFunds/'
     || replace(encode(convert_to(jsonb_build_object('cnpj', '0', 'identifierFund', v_code, 'typeFund', 7)::text, 'UTF8'), 'base64'), E'\n', '');
   begin
+    -- a B3 responde em menos de 1 s; não deixar a sessão presa se ela travar
+    execute $q$select extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', '6000')$q$;
     execute $q$
       select r.status, r.content
       from extensions.http((
