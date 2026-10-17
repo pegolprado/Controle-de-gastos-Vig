@@ -2,16 +2,38 @@ name: Sonda B3 (temporário)
 on:
   push:
     branches: [claude/finance-os-app-768to0]
-    paths: [.github/workflows/probe-b3.yml]
+    paths: [.github/workflows/probe-b3.yml, supabase/migrations/**]
 permissions:
   contents: read
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - run: |
-          P=$(printf '%s' '{"cnpj":"0","identifierFund":"MXRF","typeFund":7}' | base64 -w0)
-          curl -sS -m 30 -D - -o /tmp/b.json -H 'Origin: https://app.financemv.com.br' "https://sistemaswebb3-listados.b3.com.br/fundsProxy/fundsCall/GetListedSupplementFunds/$P" | grep -i -E 'HTTP/|access-control|content-type|cache'
-          head -c 400 /tmp/b.json; echo
-          echo "=== OPTIONS"; curl -sS -m 30 -X OPTIONS -D - -o /dev/null -H 'Origin: https://app.financemv.com.br' -H 'Access-Control-Request-Method: GET' "https://sistemaswebb3-listados.b3.com.br/fundsProxy/fundsCall/GetListedSupplementFunds/$P" | grep -i -E 'HTTP/|access-control'
+      - uses: actions/checkout@v4
+      - name: Postgres com extensão http + migrações + consulta real à B3
+        run: |
+          set -e
+          docker run -d --name pg -e POSTGRES_PASSWORD=pg -p 5432:5432 postgres:16
+          sleep 8
+          docker exec pg bash -c 'apt-get update -qq && apt-get install -y -qq postgresql-16-http >/dev/null'
+          export PGPASSWORD=pg
+          P="psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q"
+          $P -f supabase/tests/00_supabase_stub.sql
+          for f in supabase/migrations/*.sql; do $P -f "$f"; done
+          $P -f supabase/tests/01_helpers.sql
+          $P -c "select extname, extversion from pg_extension where extname='http'"
+          $P -At <<'SQL'
+          do $$ declare u uuid; begin
+            u := tests.create_user('probe@example.com');
+            perform tests.login(u);
+            raise notice 'HSML11: %', public.fii_sync('HSML11');
+            raise notice 'BRCO11: %', public.fii_sync('BRCO11');
+            raise notice 'MXRF11: %', public.fii_sync('MXRF11');
+            raise notice 'XXXX11: %', public.fii_sync('XXXX11');
+            raise notice 'HSML11 de novo: %', public.fii_sync('HSML11');
+          end $$;
+          select code, name, not_found from public.fii_funds order by code;
+          select code, kind, record_date, payment_date, rate, related_to from public.fii_distributions order by code, payment_date desc limit 12;
+          select code, count(*) from public.fii_distributions group by code;
+          SQL
