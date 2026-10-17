@@ -10,18 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
       - run: |
-          b() { printf '%s' "$1" | base64 -w0; }
-          U=https://sistemaswebb3-listados.b3.com.br/fundsProxy/fundsCall
-          get() { echo "=== $1 $2"; curl -sS -m 30 -A 'Mozilla/5.0' "$U/$1/$(b "$2")" | head -c 700; echo; }
-          get GetListedFundsSIG '{"language":"pt-br","typeFund":7,"pageNumber":1,"pageSize":3}'
-          get GetListedFundsSIG '{"language":"pt-br","typeFund":7,"pageNumber":1,"pageSize":3,"keyword":""}'
-          get GetListFunds '{"language":"pt-br","typeFund":7,"pageNumber":1,"pageSize":3}'
-          get GetListedFunds '{"language":"pt-br","typeFund":"7","pageNumber":1,"pageSize":3}'
-          get GetDetailFundSIG '{"language":"pt-br","typeFund":7,"identifierFund":"HSML"}'
-          get GetDetailFund '{"language":"pt-br","typeFund":7,"identifierFund":"HSML"}'
-          echo "=== sem ticker válido"; curl -sS -m 30 -A 'Mozilla/5.0' "$U/GetListedSupplementFunds/$(b '{"cnpj":"0","identifierFund":"ZZZZ","typeFund":7}')" | head -c 300; echo
-          echo "=== csv B3 instrumentos"; curl -sS -m 30 -A 'Mozilla/5.0' -o /tmp/f.html -w '%{http_code}\n' "https://sistemaswebb3-listados.b3.com.br/fundsPage/7"
-          set -a; . .github/public-config.env; set +a
-          echo "=== supabase openapi app_settings"; curl -sS -m 30 -H "apikey: $VITE_SUPABASE_ANON_KEY" "$VITE_SUPABASE_URL/rest/v1/" | python3 -c "import json,sys; d=json.load(sys.stdin); print(list(d.get('paths',{}).keys())[:40]); print(json.dumps(d.get('definitions',{}).get('app_settings',{}).get('properties',{}).get('app_name')))"
+          P=$(printf '%s' '{"cnpj":"0","identifierFund":"MXRF","typeFund":7}' | base64 -w0)
+          curl -sS -m 30 -D - -o /tmp/b.json -H 'Origin: https://app.financemv.com.br' "https://sistemaswebb3-listados.b3.com.br/fundsProxy/fundsCall/GetListedSupplementFunds/$P" | grep -i -E 'HTTP/|access-control|content-type|cache'
+          head -c 400 /tmp/b.json; echo
+          echo "=== OPTIONS"; curl -sS -m 30 -X OPTIONS -D - -o /dev/null -H 'Origin: https://app.financemv.com.br' -H 'Access-Control-Request-Method: GET' "https://sistemaswebb3-listados.b3.com.br/fundsProxy/fundsCall/GetListedSupplementFunds/$P" | grep -i -E 'HTTP/|access-control'
