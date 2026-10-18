@@ -43,3 +43,10 @@ test('categoria automática ao lançar à mão (aprende com o histórico)', asyn
   await dialog.getByLabel('Descrição').fill('Uber para o cinema');
   await expect(dialog.getByLabel('Categoria').locator('option:checked')).toHaveText(/Lazer/);
 });
+
+test('link de confirmação aberto em outro navegador: avisa que o e-mail foi confirmado', async ({ page }) => {
+  await installMock(page, createState());
+  await page.goto('/auth/callback?code=codigo-de-outro-navegador');
+  await expect(page).toHaveURL(/\/entrar$/);
+  await expect(page.getByText('E-mail confirmado!')).toBeVisible();
+});

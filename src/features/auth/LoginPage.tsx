@@ -15,7 +15,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/';
+  const state = location.state as { from?: string; confirmed?: boolean } | null;
+  const from = state?.from ?? '/';
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,6 +46,11 @@ export default function LoginPage() {
         </>
       }
     >
+      {state?.confirmed && (
+        <p role="status" className="mb-4 rounded-xl border border-positive/25 bg-positive/10 px-3 py-2.5 text-sm text-positive">
+          <strong>E-mail confirmado!</strong> Agora é só entrar com seu e-mail e senha.
+        </p>
+      )}
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
         <Field label="E-mail">
           {(id) => <Input id={id} type="email" autoComplete="email" inputMode="email" required value={email} onChange={(e) => setEmail(e.target.value)} />}
