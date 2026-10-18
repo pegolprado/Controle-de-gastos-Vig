@@ -39,7 +39,7 @@ begin
   insert into public.fii_positions (workspace_id, ticker, quantity) values (ws, 'HSML11', 24);
   perform tests.assert_fails(format($q$insert into public.fii_positions (workspace_id, ticker, quantity) values (%L, 'HSML11', 1)$q$, ws), 'fundo repetido no espaço');
   perform tests.assert_fails(format($q$insert into public.fii_positions (workspace_id, ticker, quantity) values (%L, 'hsml11', 1)$q$, ws), 'código fora do padrão');
-  perform tests.assert_fails(format($q$insert into public.fii_positions (workspace_id, ticker, quantity) values (%L, 'BRCO11', 0)$q$, ws), 'quantidade zero');
+  perform tests.assert_fails(format($q$insert into public.fii_positions (workspace_id, ticker, quantity) values (%L, 'BRCO11', -1)$q$, ws), 'quantidade negativa');
   update public.fii_positions set quantity = 30 where ticker = 'HSML11';
   perform tests.assert_eq((select quantity from public.fii_positions where workspace_id = ws and ticker = 'HSML11'), 30, 'quantidade editada');
 

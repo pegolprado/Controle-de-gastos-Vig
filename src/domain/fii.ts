@@ -1,6 +1,6 @@
-/** Regras puras da Renda FII: valores a receber, situação do pagamento e resumos. */
+/** Regras puras da Renda (FII e ações): valores a receber, situação do pagamento, metas e IR. */
 import { addDays, addMonths, diffDays, makeDate, monthLabel, parseISO, startOfMonth, todayISO, type ISODate } from '@/lib/dates';
-import type { FiiDistribution, FiiPosition } from '@/lib/types';
+import type { AssetType, FiiDistribution, FiiPosition, FiiTrade, StockDistribution } from '@/lib/types';
 
 /** "hglg" / "HGLG11 " → "HGLG11"; null se não parecer um código de FII. */
 export function normalizeTicker(input: string): string | null {
@@ -9,11 +9,34 @@ export function normalizeTicker(input: string): string | null {
   return /^[A-Z][A-Z0-9]{3}1[1-5]$/.test(t) ? t : null;
 }
 
+/** "petr4" → "PETR4"; aceita ON (3), PN (4), PNA/PNB… (5–8) e units (11). */
+export function normalizeStockTicker(input: string): string | null {
+  const t = input.trim().toUpperCase().replace(/\s+/g, '');
+  return /^[A-Z][A-Z0-9]{3}([3-8]|11)$/.test(t) ? t : null;
+}
+
 export const baseCode = (ticker: string) => ticker.slice(0, 4);
 
-/** Valor recebido: cotas × valor por cota, truncado nos centavos (como a B3 credita). */
-export function payoutCents(quantity: number, rate: number): number {
-  return Math.floor(Math.round(quantity * Number(rate) * 1e6) / 1e4);
+/** Juros sobre capital próprio: 15% de IR retido na fonte. */
+export const isJcp = (kind: string) => kind.startsWith('JRS');
+
+/** Valor recebido: cotas × valor por cota (JCP líquido), truncado nos centavos (como a B3 credita). */
+export function payoutCents(quantity: number, rate: number, kind = ''): number {
+  return Math.floor(Math.round(quantity * Number(rate) * (isJcp(kind) ? 0.85 : 1) * 1e6) / 1e4);
+}
+
+/** Mesmo critério do banco (stock_isin_matches): classe da ação pelo ISIN. */
+export function stockIsinMatches(ticker: string, isin: string): boolean {
+  const suffix = ticker.slice(4);
+  const cls: Record<string, string> = { '3': 'ACNOR', '4': 'ACNPR', '5': 'ACNPA', '6': 'ACNPB', '7': 'ACNPC', '8': 'ACNPD', '11': 'CDAM' };
+  const want = cls[suffix];
+  return !!want && isin.slice(6, 6 + want.length) === want;
+}
+
+/** Cotas com direito ao provento: operações até a data com (sem operações, vale a quantidade atual). */
+export function qtyAt(trades: FiiTrade[], date: string | null, current: number): number {
+  if (!trades.length) return current;
+  return trades.filter((t) => !t.trade_date || !date || t.trade_date <= date).reduce((s, t) => s + t.quantity, 0);
 }
 
 export type PayStatus = { tone: 'positive' | 'warning' | 'brand' | 'info' | 'neutral'; label: string; paid: boolean };
@@ -40,15 +63,47 @@ export interface FiiPayment {
   amount_cents: number;
   /** estimativa pelo histórico: o fundo ainda não anunciou na B3 */
   projected?: boolean;
+  /** quantidade atual (a previsão usa as cotas de hoje) */
+  current?: number;
+  asset_type?: AssetType;
 }
 
-/** Pagamentos de cada posição (mais recentes primeiro). */
-export function paymentsFor(position: FiiPosition, dists: FiiDistribution[]): FiiPayment[] {
+/** Proventos do ativo (FII: as cotas; ação: a classe certa — PN, ON ou unit). */
+function distsOf(position: Pick<FiiPosition, 'ticker' | 'asset_type'>, dists: Array<FiiDistribution | StockDistribution>) {
   const code = baseCode(position.ticker);
-  return dists
-    .filter((d) => d.code === code)
+  return dists.filter((d) => d.code === code && (position.asset_type !== 'stock' || stockIsinMatches(position.ticker, d.isin)));
+}
+
+/** Pagamentos de cada posição (mais recentes primeiro), com as cotas que tinham direito na data com. */
+export function paymentsFor(
+  position: Pick<FiiPosition, 'ticker' | 'quantity'> & { asset_type?: AssetType },
+  dists: Array<FiiDistribution | StockDistribution>,
+  trades: FiiTrade[] = [],
+): FiiPayment[] {
+  const pos = { ticker: position.ticker, asset_type: position.asset_type ?? 'fii' };
+  return distsOf(pos, dists)
+    .filter((d): d is FiiDistribution => !!d.payment_date)
     .sort((a, b) => b.payment_date.localeCompare(a.payment_date))
-    .map((dist) => ({ ticker: position.ticker, quantity: position.quantity, dist, amount_cents: payoutCents(position.quantity, dist.rate) }));
+    .map((dist) => {
+      const quantity = qtyAt(trades, dist.record_date ?? dist.payment_date, position.quantity);
+      return { ticker: position.ticker, quantity, dist, amount_cents: payoutCents(quantity, dist.rate, dist.kind), current: position.quantity, asset_type: pos.asset_type };
+    })
+    .filter((p) => p.quantity > 0);
+}
+
+/** Proventos já aprovados com data de pagamento "a definir" (comum em JCP de ações). */
+export function undatedFor(
+  position: Pick<FiiPosition, 'ticker' | 'quantity'> & { asset_type?: AssetType },
+  dists: Array<FiiDistribution | StockDistribution>,
+  trades: FiiTrade[] = [],
+): Array<{ kind: string; rate: number; record_date: string | null; amount_cents: number }> {
+  return distsOf({ ticker: position.ticker, asset_type: position.asset_type ?? 'fii' }, dists)
+    .filter((d) => !d.payment_date)
+    .map((d) => {
+      const q = qtyAt(trades, d.record_date, position.quantity);
+      return { kind: d.kind, rate: Number(d.rate), record_date: d.record_date, amount_cents: payoutCents(q, d.rate, d.kind) };
+    })
+    .filter((d) => d.amount_cents > 0);
 }
 
 const weekday = (iso: ISODate) => {
@@ -101,8 +156,11 @@ export function projectNext(payments: FiiPayment[], today: ISODate = todayISO())
     date = toBusinessDay(makeDate(p.y, p.m + 1, typicalDay), before > after);
   }
   const recordGap = last.dist.record_date ? diffDays(last.dist.payment_date, last.dist.record_date) : null;
+  const qty = last.current ?? last.quantity;
   return {
     ...last,
+    quantity: qty,
+    amount_cents: payoutCents(qty, last.dist.rate, last.dist.kind),
     projected: true,
     dist: { ...last.dist, payment_date: date, record_date: recordGap !== null ? toBusinessDay(addDays(date, -recordGap), true) : null, approved_on: null, related_to: null },
   };
@@ -192,4 +250,97 @@ export function summarize(all: FiiPayment[], today: ISODate = todayISO(), projec
 export function yieldOnCost(rate: number, avgPriceCents: number | null): number | null {
   if (!avgPriceCents) return null;
   return (Number(rate) * 100 * 100) / avgPriceCents;
+}
+
+// ---------------------------------------------------------------- meta de renda passiva
+
+/** Renda mensal estimada por cota (líquida): FII = último rendimento; ação = média dos últimos 12 meses. */
+export function monthlyPerShare(assetType: AssetType, payments: FiiPayment[], today: ISODate = todayISO()): number {
+  const net = (p: FiiPayment) => Number(p.dist.rate) * (isJcp(p.dist.kind) ? 0.85 : 1);
+  if (assetType === 'fii') {
+    const last = payments.find((p) => p.dist.kind === 'RENDIMENTO' && p.dist.payment_date <= addDays(today, 45));
+    return last ? net(last) : 0;
+  }
+  const from = addDays(today, -365);
+  return payments.filter((p) => p.dist.payment_date > from && p.dist.payment_date <= today).reduce((s, p) => s + net(p), 0) / 12;
+}
+
+export interface GoalRow {
+  ticker: string;
+  perShare: number;
+  price: number | null;
+  /** rendimento mensal sobre o preço atual (%) */
+  yieldPct: number | null;
+  sharesNeeded: number;
+  cost_cents: number | null;
+}
+
+export function goalPlan(
+  goalCents: number,
+  items: Array<{ ticker: string; quantity: number; perShare: number; price: number | null }>,
+): { current_cents: number; missing_cents: number; pct: number; rows: GoalRow[] } {
+  const current = Math.round(items.reduce((s, i) => s + i.quantity * i.perShare * 100, 0));
+  const missing = Math.max(0, goalCents - current);
+  const rows = items
+    .filter((i) => i.perShare > 0)
+    .map((i) => {
+      const sharesNeeded = Math.ceil(missing / (i.perShare * 100));
+      return {
+        ticker: i.ticker,
+        perShare: i.perShare,
+        price: i.price,
+        yieldPct: i.price ? (i.perShare / i.price) * 100 : null,
+        sharesNeeded,
+        cost_cents: i.price ? Math.round(sharesNeeded * i.price * 100) : null,
+      };
+    })
+    .sort((a, b) => (b.yieldPct ?? -1) - (a.yieldPct ?? -1));
+  return { current_cents: current, missing_cents: missing, pct: goalCents ? Math.min(100, (current / goalCents) * 100) : 0, rows };
+}
+
+// ---------------------------------------------------------------- imposto de renda
+
+export type IrGroup = 'fii' | 'dividendos' | 'jcp';
+
+export const IR_GROUP_LABEL: Record<IrGroup, { title: string; where: string }> = {
+  fii: { title: 'Rendimentos de FII', where: 'Rendimentos isentos e não tributáveis → Outros (informe o CNPJ do fundo)' },
+  dividendos: { title: 'Dividendos de ações', where: 'Rendimentos isentos e não tributáveis → Lucros e dividendos recebidos' },
+  jcp: { title: 'Juros sobre capital próprio (líquido)', where: 'Rendimentos sujeitos à tributação exclusiva → Juros sobre capital próprio' },
+};
+
+export function irReport(
+  year: number,
+  items: Array<{ ticker: string; name: string | null; assetType: AssetType; payments: FiiPayment[] }>,
+  today: ISODate = todayISO(),
+): Array<{ group: IrGroup; ticker: string; name: string | null; total_cents: number; count: number }> {
+  const from = `${year}-01-01`;
+  const to = `${year}-12-31` < today ? `${year}-12-31` : today;
+  const out = new Map<string, { group: IrGroup; ticker: string; name: string | null; total_cents: number; count: number }>();
+  for (const it of items) {
+    for (const p of it.payments) {
+      if (p.projected || p.dist.payment_date < from || p.dist.payment_date > to) continue;
+      const group: IrGroup = it.assetType === 'fii' ? 'fii' : isJcp(p.dist.kind) ? 'jcp' : 'dividendos';
+      const key = `${group}|${it.ticker}`;
+      const cur = out.get(key) ?? { group, ticker: it.ticker, name: it.name, total_cents: 0, count: 0 };
+      cur.total_cents += p.amount_cents;
+      cur.count++;
+      out.set(key, cur);
+    }
+  }
+  const order: IrGroup[] = ['fii', 'dividendos', 'jcp'];
+  return [...out.values()].sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group) || a.ticker.localeCompare(b.ticker));
+}
+
+/** "JRS CAP PROPRIO" → "JCP"; "RENDIMENTO" → "Rendimento"… */
+export function kindLabel(kind: string): string {
+  if (isJcp(kind)) return 'JCP';
+  const k = kind.toLowerCase();
+  if (k.startsWith('amortiza')) return 'Amortização';
+  return k.charAt(0).toUpperCase() + k.slice(1);
+}
+
+/** Descrição do lançamento (igual à do piloto automático no banco). */
+export function incomeDescription(p: Pick<FiiPayment, 'ticker' | 'asset_type' | 'dist'>): string {
+  if (isJcp(p.dist.kind)) return `JCP ${p.ticker}`;
+  return `${p.asset_type === 'stock' ? 'Dividendo' : 'Rendimento'} ${p.ticker}`;
 }
