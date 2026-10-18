@@ -105,7 +105,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader title="Segurança" />
           <div className="grid gap-3 p-5">
-            <p className="text-[13px] text-muted">Último acesso: {formatDateTime(session?.user.last_sign_in_at)}</p>
+            <p className="text-[13px] text-muted">Último login com senha: {formatDateTime(session?.user.last_sign_in_at)}</p>
             <div className="flex flex-wrap gap-2">
               <Button icon={<KeyRound className="size-4" />} onClick={() => setPwOpen(true)}>Alterar senha</Button>
               <Button icon={<LogOut className="size-4" />} onClick={async () => { if (await confirm({ title: 'Sair de todos os dispositivos?', description: 'Todas as sessões abertas (celular, computador) serão encerradas.', confirmLabel: 'Sair de todos', tone: 'primary' })) await signOut('global'); }}>
