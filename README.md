@@ -1,5 +1,7 @@
 # Finance MV
 
+> Este repositório também contém, na pasta [`atlas/`](atlas/README.md), a plataforma **ATLAS Telecom Intelligence** (análise de bilhetagem e ERB), independente deste app.
+
 Controle financeiro pessoal e familiar: contas, cartões e faturas, parcelamentos, recorrências, orçamentos, metas, contas a pagar e receber, relatórios e espaços compartilhados com permissões reais. É um **PWA** que se instala no celular e no computador e se atualiza sozinho, sem reinstalar.
 
 Roda **inteiro nos planos gratuitos**: Supabase Free (banco, login, arquivos), Cloudflare Pages (hospedagem com HTTPS) e GitHub Actions (testes, deploy e backup).
