@@ -1,0 +1,11 @@
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+frontend/dist
+frontend/public/vendor
+frontend/test-results
+frontend/playwright-report
+frontend/tsconfig.tsbuildinfo
+backend/data
+backups
+.env

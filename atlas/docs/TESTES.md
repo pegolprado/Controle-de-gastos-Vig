@@ -4,7 +4,7 @@
 |---|---|---|
 | Servidor de login | `cd backend && python -m pytest -q` | só existem as tabelas de usuários; nenhuma rota de dados; limite de corpo; CSRF; bloqueio de conta; `Clear-Site-Data` no logout; escalada de privilégio; ciclo de vida do usuário; MFA; cabeçalhos |
 | Motor no navegador | `cd frontend && npx vitest run` | normalização (números, datas, fusos, durações, tipos, CGI, coordenadas), resolução de ERB (R1–R4, ambiguidade, MCC/MNC, versões), assistente |
-| Ponta a ponta | `cd frontend && npx playwright test` | login → demonstração → todas as telas sem erro → exportação Excel e PDF → **nada no armazenamento do navegador** → sair → novo login sem dados; carga de arquivo pelo assistente |
+| Ponta a ponta (também validado na pilha Docker com HTTPS) | `cd frontend && npx playwright test` | login → demonstração → todas as telas sem erro → exportação Excel e PDF → **nada no armazenamento do navegador** → sair → novo login sem dados; carga de arquivo pelo assistente |
 | Tipos, lint, build | `npx tsc -b && npx eslint . && npm run build` | |
 
 O teste ponta a ponta precisa da API rodando com o usuário de teste:

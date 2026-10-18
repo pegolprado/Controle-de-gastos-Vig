@@ -11,7 +11,13 @@ else
   cp "$IN" "$TMP"
 fi
 python3 -c "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); assert c.execute('PRAGMA integrity_check').fetchone()[0]=='ok'; print('usuários no backup:', c.execute('SELECT count(*) FROM users').fetchone()[0])" "$TMP"
+chmod 644 "$TMP"
 docker compose stop api
-docker compose run --rm -T -v "$TMP:/restore.db:ro" api python -c "import shutil; shutil.copy('/restore.db', '/data/marx-usuarios.db')"
-docker compose start api
+trap 'rm -f "$TMP"; docker compose start api >/dev/null' EXIT
+docker compose run --rm -T -v "$TMP:/restore.db:ro" api python -c "
+import os, shutil
+for f in ('/data/marx-usuarios.db-wal', '/data/marx-usuarios.db-shm'):
+    if os.path.exists(f): os.remove(f)
+shutil.copy('/restore.db', '/data/marx-usuarios.db')
+"
 echo "restaurado."
