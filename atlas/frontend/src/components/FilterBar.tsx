@@ -1,9 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { Bookmark, Filter, RotateCcw, Save, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { api } from '../api/client'
+import { nextId, setState, useSession } from '../engine/session'
 import { useCase } from '../app/layout'
 import { EVENT_TYPE_LABEL, fmtNumber } from '../lib/format'
 
@@ -51,7 +50,6 @@ function toggle<T>(arr: T[] | undefined, v: T): T[] {
 
 export function FilterBar({ value, onChange, compact, hide = [] }: { value: EventFilter; onChange: (f: EventFilter) => void; compact?: boolean; hide?: string[] }) {
   const { c, meta } = useCase()
-  const qc = useQueryClient()
   const [draft, setDraft] = useState<EventFilter>(value)
   const [more, setMore] = useState(false)
   const [numText, setNumText] = useState((value.numbers ?? []).join(', '))
@@ -59,15 +57,14 @@ export function FilterBar({ value, onChange, compact, hide = [] }: { value: Even
     setDraft(value)
     setNumText((value.numbers ?? []).join(', '))
   }, [value])
-  const saved = useQuery({ queryKey: ['saved', c.id], queryFn: () => api<any[]>(`/cases/${c.id}/saved-queries`) })
-  const save = useMutation({
-    mutationFn: (name: string) => api(`/cases/${c.id}/saved-queries`, { body: { name, filters: cleanFilter(draft) } }),
-    onSuccess: () => {
-      toast.success('Consulta salva')
-      qc.invalidateQueries({ queryKey: ['saved', c.id] })
+  const saved = { data: useSession((s) => s.savedQueries) }
+  const save = {
+    mutate: (name: string) => {
+      setState((s) => ({ savedQueries: [...s.savedQueries, { id: nextId(), name: name.slice(0, 80), filters: cleanFilter(draft) }] }))
+      toast.success('Filtros guardados nesta sessão (somem ao sair)')
     },
-    onError: (e: any) => toast.error(e.message),
-  })
+  }
+  void c
   const targets: { number: string; label: string }[] = meta?.targets ?? []
   const set = (patch: Partial<EventFilter>) => setDraft((d) => ({ ...d, ...patch }))
   const apply = () => {
@@ -267,7 +264,7 @@ export function FilterBar({ value, onChange, compact, hide = [] }: { value: Even
             </div>
           </div>
           <div>
-            <span className="label">Consultas salvas</span>
+            <span className="label">Filtros desta sessão</span>
             <div className="flex flex-wrap gap-1">
               {(saved.data ?? []).map((s) => (
                 <button
@@ -292,7 +289,7 @@ export function FilterBar({ value, onChange, compact, hide = [] }: { value: Even
                 if (name) save.mutate(name)
               }}
             >
-              <Save className="h-3.5 w-3.5" /> Salvar filtros atuais
+              <Save className="h-3.5 w-3.5" /> Guardar filtros nesta sessão
             </button>
           </div>
         </div>

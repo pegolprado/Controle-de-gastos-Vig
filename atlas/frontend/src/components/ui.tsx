@@ -137,7 +137,7 @@ export function QueryState<T>({ q, empty, children }: { q: { isLoading: boolean;
   if (q.isLoading) return <Loading />
   if (q.error) return <ErrorBox error={q.error} onRetry={q.refetch} />
   if (q.data === undefined) return null
-  if (empty && empty(q.data)) return <Empty title="Nenhum resultado" >Ajuste os filtros ou importe arquivos para este caso.</Empty>
+  if (empty && empty(q.data)) return <Empty title="Nenhum resultado" >Ajuste os filtros ou carregue arquivos nesta análise.</Empty>
   return <>{children(q.data)}</>
 }
 
@@ -240,9 +240,9 @@ export function Criteria({ criteria }: { criteria?: Record<string, any> }) {
 }
 
 /** Link "abrir os registros" que leva ao explorador com o filtro aplicado. */
-export function DrillLink({ caseId, filter, children, className }: { caseId: number | string; filter: object; children: ReactNode; className?: string }) {
+export function DrillLink({ filter, children, className }: { caseId?: number | string; filter: object; children: ReactNode; className?: string }) {
   return (
-    <Link className={clsx('text-accent hover:underline', className)} to={`/casos/${caseId}/eventos?f=${encodeFilter(filter)}`}>
+    <Link className={clsx('text-accent hover:underline', className)} to={`/analise/eventos?f=${encodeFilter(filter)}`}>
       {children}
     </Link>
   )
@@ -256,7 +256,7 @@ export function Num({ n, caseId, label }: { n?: string | null; caseId?: number |
       {label && <span className="ml-1 font-sans text-xs text-teal">({label})</span>}
     </span>
   )
-  if (!caseId) return text
+  if (caseId === undefined) return text
   return (
     <DrillLink caseId={caseId} filter={{ numbers: [n] }} className="!text-text hover:!text-accent">
       {text}

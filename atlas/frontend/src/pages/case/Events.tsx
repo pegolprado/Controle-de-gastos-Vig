@@ -1,10 +1,11 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { ArrowDown, ArrowUp, Columns3, FileDown, PhoneCall } from 'lucide-react'
+import { ArrowDown, ArrowUp, Columns3, PhoneCall } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
-import { api, download } from '../../api/client'
+import { ExportButtons } from '../../components/Export'
+import { allEvents, listEvents } from '../../engine/analytics'
+import { EVENT_EXPORT_COLS } from '../../engine/report'
 import { useCase } from '../../app/layout'
 import { type EventFilter, FilterBar } from '../../components/FilterBar'
 import { Badge, Criteria, ErrorBox, Loading, PageHeader, Pagination, Tabs } from '../../components/ui'
@@ -97,17 +98,9 @@ export default function Events() {
   const eff: EventFilter = tab !== 'todos' ? { ...filter, event_types: TAB_TYPES[tab] } : filter
   const q = useQuery({
     queryKey: ['events', c.id, eff, page, size, sort, order],
-    queryFn: () => api(`/cases/${c.id}/events/search`, { body: { filter: eff, page, size, sort, order } }),
+    queryFn: () => listEvents(eff, page, size, sort, order) as Promise<any>,
     placeholderData: keepPreviousData,
   })
-  const exportAs = async (fmt: 'csv' | 'xlsx') => {
-    try {
-      toast.message('Gerando exportação…')
-      await download(`/cases/${c.id}/events/export`, { filter: eff, fmt }, `eventos.${fmt}`)
-    } catch (e: any) {
-      toast.error(e.message)
-    }
-  }
   const visible = COLS.filter((x) => cols.includes(x.key))
   return (
     <div>
@@ -116,16 +109,12 @@ export default function Events() {
         title="Explorador de registros"
         subtitle="Chamadas, SMS, sessões de dados e eventos normalizados. Horários conforme o documento de origem; duplicados e registros fora do período autorizado ficam ocultos por padrão (ative em “Mais filtros”)."
         actions={
-          c.can_export && (
-            <>
-              <button className="btn-ghost" onClick={() => exportAs('csv')}>
-                <FileDown className="h-4 w-4" /> CSV
-              </button>
-              <button className="btn-ghost" onClick={() => exportAs('xlsx')}>
-                <FileDown className="h-4 w-4" /> XLSX
-              </button>
-            </>
-          )
+          <ExportButtons
+            build={async () => {
+              const rows = await allEvents(eff, 1_000_000)
+              return { title: 'Registros', subtitle: `${rows.length} registros`, columns: EVENT_EXPORT_COLS.map((k) => ({ key: k, label: k })), rows, criteria: q.data?.criteria }
+            }}
+          />
         }
       />
       <Tabs

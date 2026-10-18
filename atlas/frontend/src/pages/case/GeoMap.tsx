@@ -4,6 +4,7 @@ import { Map as MapIcon, Pause, Play, SkipBack, SkipForward } from 'lucide-react
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../../api/client'
+import { cellSequence, geoPoints } from '../../engine/analytics'
 import { useCase } from '../../app/layout'
 import { SERIES } from '../../components/charts'
 import { FilterBar } from '../../components/FilterBar'
@@ -72,7 +73,7 @@ function StationsMap({ tile, attr }: { tile: string; attr: string }) {
   const [radius, setRadius] = useState(600)
   const [showSectors, setShowSectors] = useState(true)
   const [sel, setSel] = useState<any>(null)
-  const q = useQuery({ queryKey: ['geo', c.id, f], queryFn: () => api(`/cases/${c.id}/geo/points`, { body: { filter: f } }) })
+  const q = useQuery({ queryKey: ['geo', c.id, f], queryFn: () => geoPoints(f) as Promise<any> })
   const { ref, map, layer } = useLeaflet(tile, attr)
   const targetIdx = useMemo(() => Object.fromEntries((meta?.targets ?? []).map((t: any, i: number) => [t.number, i])), [meta])
   useEffect(() => {
@@ -184,7 +185,7 @@ function SequenceView({ tile, attr, playback }: { tile: string; attr: string; pl
   const [to, setTo] = useState('')
   const [showLine, setShowLine] = useState(false)
   const filter = { targets: target ? [target] : [], ...(from ? { date_from: from } : {}), ...(to ? { date_to: to } : {}) }
-  const q = useQuery({ queryKey: ['seq', c.id, filter], queryFn: () => api(`/cases/${c.id}/geo/sequence`, { body: { filter } }), enabled: !!target })
+  const q = useQuery({ queryKey: ['seq', c.id, filter], queryFn: () => cellSequence(filter) as Promise<any>, enabled: !!target })
   const { ref, map, layer } = useLeaflet(tile, attr)
   const [idx, setIdx] = useState(0)
   const [playing, setPlaying] = useState(false)

@@ -1,9 +1,10 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, FileSearch, Pencil } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { api } from '../../api/client'
+import { eventDetail } from '../../engine/analytics'
+import { correctEvent, correctionsFor } from '../../engine/corrections'
 import { useCase } from '../../app/layout'
 import { Badge, DrillLink, ErrorBox, Field, Loading, Modal, Notice, PageHeader } from '../../components/ui'
 import { EVENT_TYPE_LABEL, fmtDateTime, fmtDuration, fmtNumber, RESOLUTION_LABEL, TZ_LABEL } from '../../lib/format'
@@ -24,8 +25,7 @@ export default function EventDetail() {
   const { c, canWrite } = useCase()
   const { eventId } = useParams()
   const navigate = useNavigate()
-  const qc = useQueryClient()
-  const q = useQuery({ queryKey: ['event', eventId], queryFn: () => api(`/cases/${c.id}/events/${eventId}`) })
+  const q = useQuery({ queryKey: ['event', eventId], queryFn: async () => ({ ...(await eventDetail(+eventId!)), corrections: correctionsFor(+eventId!) }) as any })
   const [corr, setCorr] = useState<{ field: string; value: string; reason: string } | null>(null)
   const [err, setErr] = useState<unknown>(null)
   if (q.isLoading) return <Loading />
@@ -165,12 +165,12 @@ export default function EventDetail() {
                   </div>
                 </div>
               ))}
-              <p className="mt-2 text-xs text-faint">Relatórios já emitidos não são alterados por correções posteriores.</p>
+              <p className="mt-2 text-xs text-faint">Arquivos já exportados não são alterados por correções posteriores; as correções valem só nesta sessão.</p>
             </section>
           )}
         </div>
       </div>
-      <Modal open={!!corr} onClose={() => setCorr(null)} title="Registrar correção auditável">
+      <Modal open={!!corr} onClose={() => setCorr(null)} title="Registrar correção">
         {corr && (
           <div className="space-y-3">
             <Notice>O valor anterior é preservado no histórico e o valor original da linha não é alterado.</Notice>
@@ -205,10 +205,9 @@ export default function EventDetail() {
               className="btn-primary w-full"
               onClick={async () => {
                 try {
-                  await api(`/cases/${c.id}/events/${e.id}/correct`, { body: { field: corr.field, value: corr.value || null, reason: corr.reason } })
-                  toast.success('Correção registrada')
+                  await correctEvent(e.id, corr.field, corr.value || null, corr.reason)
+                  toast.success('Correção aplicada nesta sessão')
                   setCorr(null)
-                  qc.invalidateQueries({ queryKey: ['event', eventId] })
                 } catch (x) {
                   setErr(x)
                 }

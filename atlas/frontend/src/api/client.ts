@@ -16,7 +16,7 @@ function readCookie(name: string): string | null {
 }
 
 export async function ensureCsrf(): Promise<string> {
-  csrf = readCookie('atlas_csrf') ?? csrf
+  csrf = readCookie('marx_csrf') ?? csrf
   if (!csrf) {
     const r = await fetch('/api/auth/csrf', { credentials: 'same-origin' })
     csrf = (await r.json()).csrf

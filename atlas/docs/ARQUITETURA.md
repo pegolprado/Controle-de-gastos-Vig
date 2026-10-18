@@ -1,46 +1,40 @@
 # Arquitetura
 
 ```
-navegador ──HTTPS──> Caddy (TLS automático, front-end estático, cabeçalhos)
-                        └── /api ──> FastAPI (uvicorn) ──> PostgreSQL 16
-                                          │                  ▲
-                                          └── fila (tabela jobs) ── worker(s) Python
-                                     armazenamento privado de arquivos (volume)
+Navegador do usuário (tudo em memória da aba)                         Servidor
+┌─────────────────────────────────────────────────────────────┐      ┌───────────────────────┐
+│ React (telas)                                               │ HTTPS│ Caddy (HTTPS, CSP)    │
+│  └─ src/engine                                              │◀────▶│  ├─ arquivos do site  │
+│      readers.ts    CSV/TXT/XLS/XLSX/JSON/XML/HTML/PDF/ZIP   │ login│  └─ /api → FastAPI    │
+│                    OCR (Tesseract WASM), SHA-256            │ only │       SQLite: usuários│
+│      importer.ts   mapeamento, normalização, duplicidades   │      └───────────────────────┘
+│      db.ts         DuckDB-WASM em memória (eventos, ERB)    │
+│      erb.ts        resolução de células (regras R1–R4)      │
+│      analytics.ts  contatos, vínculos, timeline, geo, stats │
+│      crossmatch.ts alerts.ts assistant.ts                   │
+│      report.ts exporter.ts   PDF (jsPDF) · Excel (ExcelJS)  │
+│      session.ts    estado da sessão (sem armazenamento)     │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-| Camada | Tecnologia |
-|---|---|
-| Interface | React 19 + TypeScript + Vite + Tailwind 4, TanStack Query, Recharts, Cytoscape (grafo), Leaflet (mapa) |
-| API | Python 3.13 + FastAPI, SQLAlchemy 2, Alembic |
-| Banco | PostgreSQL 16 (índices por caso/número/data/célula; JSONB para valores originais) |
-| Fila | tabela `jobs` com `SELECT … FOR UPDATE SKIP LOCKED` (sem Redis: menos um serviço, estado transacional e auditável) |
-| Leitura de arquivos | csv, openpyxl (XLSX), xlrd (XLS), lxml (XML/HTML), pdfplumber (PDF texto) + Tesseract (OCR) |
-| Relatórios | ReportLab (PDF), openpyxl (XLSX), CSV, JSON, HTML |
+## Fluxo
+1. Login → cookie de sessão. A API devolve só os dados do usuário (`/api/auth/me`).
+2. O usuário seleciona arquivos → o navegador calcula o SHA-256, detecta formato/layout e mostra amostra.
+3. O assistente de importação confirma mapeamento, formatos de data, fuso e regras; a prévia valida linha a linha.
+4. O processamento lê o arquivo em fluxo (lotes de 20 mil linhas) e grava no DuckDB em memória, mantendo o
+   vínculo com arquivo/linha/página e os valores originais.
+5. As telas consultam o DuckDB local; cada resultado traz os critérios usados.
+6. Exportações são geradas no navegador e baixadas; o SHA-256 do arquivo aparece na tela.
+7. Sair/inatividade/recarregar → banco e estado zerados, página recarregada.
 
-## Módulos do back-end (`backend/app`)
-- `parsers/` — detecção de formato/codificação/separador/cabeçalho, leitores por formato, ZIP seguro, catálogo de campos e sinônimos.
-- `services/normalize.py` — números (E.164, sem deduzir operadora), datas/fusos, durações, tipos de evento, identificadores de célula, coordenadas, indício de operadora.
-- `services/importer.py` — análise, prévia, importação em lotes (COPY), ocorrências por linha, deduplicação, cadastro de ERB versionado.
-- `services/erb.py` — motor de resolução de células (regras versionadas, ambiguidades, revisão manual preservada).
-- `services/analytics.py` — filtros combinados e consultas analíticas (resumo, contatos, períodos, comparação, contatos em comum, coincidências, grafo, linha do tempo, células, mapa, sequência, padrões).
-- `services/crossmatch.py` — validação prévia e correspondência de registros recíprocos entre fontes.
-- `services/alerts.py`, `services/reports.py`, `services/assistant.py`, `services/demo.py`.
-- `routers/` — API REST; `deps.py` — autenticação e permissões por caso; `audit.py` — trilha encadeada; `jobs.py`/`tasks.py` — fila.
+## Regras analíticas
+Versão das regras: `RULES_VERSION` (src/engine/normalize.ts), registrada em todo relatório.
+- Números em E.164; a operadora **não** é deduzida pelo prefixo (portabilidade).
+- Fuso: confirmado / presumido / desconhecido, sinalizado por registro.
+- Duplicidade: mesmo alvo, origem, destino, data/hora UTC, duração, tipo, célula e IP.
+- ERB: CI, ECI e NCI nunca se equiparam; MCC/MNC do registro prevalece sobre a operadora do arquivo; coordenadas
+  nunca são estimadas; ambiguidades são listadas para revisão manual.
 
-## Modelo de dados (principais tabelas)
-`organizations`, `users`, `cases`, `case_members`, `access_justifications`, `targets`, `source_files` (original + SHA-256),
-`imports` + `import_issues`, `layout_profiles` (mapeamentos reutilizáveis), `events` (registro normalizado com valores
-originais em `raw`, linha/página de origem, hash do arquivo, fuso e status do fuso, flags de duplicidade/escopo e resolução
-de ERB), `event_corrections`, `erb_registry_versions` + `erb_cells`, `resolution_runs`, `saved_queries`, `annotations`,
-`alert_rules` + `alerts`, `reports` + `report_reviews`, `audit_log`, `jobs`, `system_settings`.
-
-## Rastreabilidade
-- Todo evento aponta para arquivo (com SHA-256), importação (com mapeamento, opções e versão das regras) e linha/página.
-- Toda resposta analítica devolve `criteria` (filtros, regras, limites) exibido na interface.
-- Relatórios são congelados: arquivo final com SHA-256 registrado + manifesto JSON com os dados usados.
-
-## Escalabilidade
-Importação em fluxo (sem carregar o arquivo na memória), gravação por COPY em lotes, agregações no servidor,
-paginação no servidor, resolução de ERB por assinatura de célula (um único UPDATE com junção por hash), deduplicação
-por função de janela. Para dezenas de milhões de registros por caso, particione `events` por `case_id`
-(PARTITION BY HASH) — o modelo já filtra sempre por caso.
+## Servidor
+FastAPI + SQLAlchemy + SQLite (WAL, `secure_delete`). Tabelas: `users` e `password_reset_tokens`. Rotas:
+`/api/auth/*` (login, MFA, senha, sessão), `/api/admin/users*`, `/api/settings`, `/api/health`.

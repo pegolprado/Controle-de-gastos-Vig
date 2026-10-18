@@ -19,11 +19,11 @@ import {
 import type { ReactNode } from 'react'
 import type { Tone } from '../components/ui'
 
-/** Módulos da tela inicial (cartões grandes) — `path` relativo ao caso quando `inCase`. */
+/** Módulos da tela inicial (cartões grandes) — `path` relativo à análise quando `inCase`. */
 export type ModuleDef = { key: string; title: string; description: string; icon: ReactNode; path: string; inCase: boolean; tone: Tone }
 
 export const MODULES: ModuleDef[] = [
-  { key: 'cases', title: 'Central de Casos', description: 'Procedimentos, alvos autorizados, períodos, membros e escopo de cada análise.', icon: <FolderKanban />, path: '/casos', inCase: false, tone: 'blue' },
+  { key: 'cases', title: 'Análise Atual', description: 'Identificação, alvos, período autorizado e escopo da análise aberta nesta aba (nada é salvo).', icon: <FolderKanban />, path: '', inCase: true, tone: 'blue' },
   { key: 'import', title: 'Importação de Bilhetagem', description: 'Assistente de importação com detecção de layout, mapeamento de colunas, validação e prévia.', icon: <Upload />, path: 'arquivos', inCase: true, tone: 'blue' },
   { key: 'cdr', title: 'Análise Telefônica', description: 'Explorador de chamadas, SMS e dados com filtros combinados e consultas salvas.', icon: <PhoneCall />, path: 'eventos', inCase: true, tone: 'blue' },
   { key: 'erb', title: 'Análise de ERB', description: 'Resolução técnica de células, cadastro versionado, células por período e inconsistências.', icon: <RadioTower />, path: 'erb', inCase: true, tone: 'amber' },
@@ -31,10 +31,10 @@ export const MODULES: ModuleDef[] = [
   { key: 'timeline', title: 'Linha do Tempo', description: 'Eventos em ordem cronológica, picos, lacunas e anotações do analista.', icon: <Clock />, path: 'linha-do-tempo', inCase: true, tone: 'blue' },
   { key: 'geo', title: 'Geolocalização', description: 'Mapa de estações com setores esquemáticos, sequência de células e reprodução cronológica.', icon: <Map />, path: 'mapa', inCase: true, tone: 'amber' },
   { key: 'stats', title: 'Análise Estatística', description: 'Distribuições, picos, mudanças de frequência e anomalias com o método explicado.', icon: <BarChart3 />, path: 'estatistica', inCase: true, tone: 'violet' },
-  { key: 'reports', title: 'Relatórios Técnicos', description: 'PDF, XLSX, CSV, JSON e HTML rastreáveis, com hash, revisão e aprovação.', icon: <FileText />, path: 'relatorios', inCase: true, tone: 'blue' },
+  { key: 'reports', title: 'Relatórios Técnicos', description: 'Exportação em PDF, Excel e CSV gerada no navegador, com critérios, hashes e rastreabilidade.', icon: <FileText />, path: 'relatorios', inCase: true, tone: 'blue' },
   { key: 'quality', title: 'Validação e Qualidade', description: 'Erros por linha, fusos, duplicidades, escopo e cruzamento multifonte.', icon: <ShieldCheck />, path: 'qualidade', inCase: true, tone: 'green' },
-  { key: 'files', title: 'Gestão de Arquivos', description: 'Originais preservados com SHA-256, verificação de integridade e histórico.', icon: <FileStack />, path: 'arquivos', inCase: true, tone: 'gray' },
-  { key: 'audit', title: 'Auditoria e Segurança', description: 'Trilha encadeada de operações, acessos, exportações e alterações de permissões.', icon: <Activity />, path: '/auditoria', inCase: false, tone: 'red' },
+  { key: 'files', title: 'Gestão de Arquivos', description: 'Arquivos lidos direto do seu computador, com SHA-256 calculado localmente; nada é enviado.', icon: <FileStack />, path: 'arquivos', inCase: true, tone: 'gray' },
+  { key: 'audit', title: 'Privacidade e Segurança', description: 'Processamento local, nenhum dado gravado, sessão individual e apagamento automático ao sair.', icon: <Activity />, path: '/configuracoes', inCase: false, tone: 'red' },
 ]
 
 export type Tool = { title: string; description: string; path: string; tab?: string }
@@ -46,7 +46,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     icon: <Upload className="h-5 w-5" />,
     tone: 'blue',
     tools: [
-      { title: 'Importador de arquivos', description: 'Envio de CSV, TXT, XLS, XLSX, XML, JSON, HTML, PDF (com OCR) e ZIP, preservando o original com SHA-256.', path: 'arquivos' },
+      { title: 'Importador de arquivos', description: 'Leitura local de CSV, TXT, XLS, XLSX, XML, JSON, HTML, PDF (com OCR) e ZIP, com SHA-256 do original.', path: 'arquivos' },
       { title: 'Identificador de layout', description: 'Detecção de formato, codificação, separador, linha de cabeçalho e indício de operadora com nível de confiança.', path: 'arquivos' },
       { title: 'Conversor de formatos', description: 'Normalização de datas, horários, fusos, durações, números e identificadores para o modelo padronizado.', path: 'importacoes' },
       { title: 'Validador de campos', description: 'Erros e avisos por linha e campo, com prévia dos registros antes do processamento.', path: 'qualidade' },
@@ -85,7 +85,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     tone: 'amber',
     tools: [
       { title: 'Identificação de células', description: 'Eventos agrupados por célula, com tecnologia, operadora e resultado da resolução.', path: 'erb' },
-      { title: 'Cruzamento com cadastro técnico', description: 'Resolução por regras versionadas, ambiguidades listadas e revisão manual auditada.', path: 'erb', tab: 'resolucao' },
+      { title: 'Cruzamento com cadastro técnico', description: 'Resolução por regras versionadas, ambiguidades listadas e revisão manual registrada no relatório.', path: 'erb', tab: 'resolucao' },
       { title: 'Cadastro de células', description: 'Tabela pesquisável do cadastro técnico por versão, com situação de validação.', path: 'erb/cadastro' },
       { title: 'Comparação temporal de células', description: 'Células usadas em cada período e células observadas para múltiplos números.', path: 'erb', tab: 'periodos' },
       { title: 'Consistência de coordenadas', description: 'Coordenadas inválidas, conflitantes ou divergentes entre versões do cadastro.', path: 'erb', tab: 'inconsistencias' },
@@ -109,8 +109,8 @@ export const TOOL_GROUPS: ToolGroup[] = [
     tone: 'violet',
     tools: [
       { title: 'Central de alertas', description: 'Regras configuráveis com registros de suporte, relevância e revisão do analista.', path: 'alertas' },
-      { title: 'Gerador de relatórios', description: 'Relatórios de bilhetagem, ERB e vínculos com rastreabilidade completa.', path: 'relatorios' },
-      { title: 'Assistente analítico local', description: 'Perguntas em português convertidas em consultas verificáveis, sem envio de dados a terceiros.', path: 'assistente' },
+      { title: 'Gerador de relatórios', description: 'Relatórios de bilhetagem, ERB e vínculos em PDF, Excel ou CSV, com rastreabilidade completa.', path: 'relatorios' },
+      { title: 'Assistente analítico local', description: 'Perguntas em português convertidas em consultas verificáveis, executadas no seu navegador.', path: 'assistente' },
     ],
   },
 ]

@@ -2,11 +2,12 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { Users2 } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { api } from '../../api/client'
+import { ExportButtons } from '../../components/Export'
+import { comparePeriods, contacts } from '../../engine/analytics'
 import { useCase } from '../../app/layout'
 import { FilterBar } from '../../components/FilterBar'
 import { Badge, Criteria, DrillLink, ErrorBox, Field, Loading, Notice, Num, PageHeader, Tabs } from '../../components/ui'
-import { fmtDate, fmtDuration, fmtInt } from '../../lib/format'
+import { fmtDate, fmtDateTime, fmtDuration, fmtInt, fmtNumber } from '../../lib/format'
 import { useUrlFilter } from '../../lib/useUrlFilter'
 
 export default function Contacts() {
@@ -35,7 +36,7 @@ export default function Contacts() {
 function Frequency() {
   const { c } = useCase()
   const [f, setF] = useUrlFilter()
-  const q = useQuery({ queryKey: ['contacts', c.id, f], queryFn: () => api(`/cases/${c.id}/analytics/contacts`, { body: { filter: f, limit: 300 } }) })
+  const q = useQuery({ queryKey: ['contacts', c.id, f], queryFn: () => contacts(f, 300) as Promise<any> })
   return (
     <>
       <FilterBar value={f} onChange={setF} />
@@ -45,6 +46,30 @@ function Frequency() {
         <ErrorBox error={q.error} />
       ) : (
         <div className="card scroll-x p-3">
+          <div className="mb-2 flex justify-end">
+            <ExportButtons
+              build={() => ({
+                title: 'Contatos recorrentes',
+                columns: [
+                  { key: 'target_number', label: 'Alvo', fmt: (v) => fmtNumber(v) },
+                  { key: 'other_number', label: 'Interlocutor', fmt: (v) => fmtNumber(v) },
+                  { key: 'events', label: 'Eventos' },
+                  { key: 'days', label: 'Dias' },
+                  { key: 'outgoing', label: 'Originados' },
+                  { key: 'incoming', label: 'Recebidos' },
+                  { key: 'calls', label: 'Chamadas' },
+                  { key: 'sms', label: 'SMS' },
+                  { key: 'call_seconds', label: 'Duração', fmt: (v) => fmtDuration(v) },
+                  { key: 'first_event', label: 'Primeiro', fmt: (v) => fmtDateTime(v) },
+                  { key: 'last_event', label: 'Último', fmt: (v) => fmtDateTime(v) },
+                  { key: 'regularity', label: 'Regularidade', fmt: (v) => (v === null ? '—' : `${Math.round(v * 100)}%`) },
+                  { key: 'reciprocal', label: 'Recíproca', fmt: (v) => (v ? 'sim' : 'não') },
+                ],
+                rows: q.data.items,
+                criteria: q.data.criteria,
+              })}
+            />
+          </div>
           <table>
             <thead>
               <tr>
@@ -105,9 +130,7 @@ function Periods() {
   const [targets, setTargets] = useState<string[]>([])
   const m = useMutation({
     mutationFn: () =>
-      api(`/cases/${c.id}/analytics/compare-periods`, {
-        body: { filter: targets.length ? { targets } : {}, period1: [p.a0 + 'T00:00:00', p.a1 + 'T23:59:59'], period2: [p.b0 + 'T00:00:00', p.b1 + 'T23:59:59'] },
-      }),
+      comparePeriods(targets.length ? { targets } : {}, [p.a0 + 'T00:00:00', p.a1 + 'T23:59:59'], [p.b0 + 'T00:00:00', p.b1 + 'T23:59:59']) as Promise<any>,
   })
   const tone: Record<string, any> = { novo: 'teal', 'deixou de ocorrer': 'red', aumentou: 'amber', reduziu: 'blue', estável: 'gray' }
   return (

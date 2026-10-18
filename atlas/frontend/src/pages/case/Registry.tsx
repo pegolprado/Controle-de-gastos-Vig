@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Database } from 'lucide-react'
 import { useState } from 'react'
-import { api } from '../../api/client'
+import { registry } from '../../engine/analytics'
 import { useCase } from '../../app/layout'
 import { Badge, DrillLink, Empty, ErrorBox, Loading, PageHeader, Pagination } from '../../components/ui'
 import { fmtDate, fmtInt } from '../../lib/format'
@@ -16,13 +16,13 @@ export default function Registry() {
   if (qtext) params.set('q', qtext)
   if (version) params.set('version_id', version)
   if (status) params.set('status', status)
-  const q = useQuery({ queryKey: ['registry', c.id, params.toString()], queryFn: () => api(`/cases/${c.id}/erb/registry?${params}`), placeholderData: keepPreviousData })
+  const q = useQuery({ queryKey: ['registry', c.id, params.toString()], queryFn: () => registry(qtext || null, version ? +version : null, status || null, page, 50) as Promise<any>, placeholderData: keepPreviousData })
   return (
     <div>
       <PageHeader
         icon={<Database className="h-5 w-5" />}
         title="Cadastro técnico de células"
-        subtitle="Linhas dos cadastros de ERB importados, por versão. Novas importações criam novas versões, sem apagar as anteriores; cada resolução registra a versão usada."
+        subtitle="Linhas dos cadastros de ERB importados, por versão. Cada cadastro carregado cria uma versão, sem apagar as anteriores; cada resolução registra a versão usada."
       />
       {q.data && (
         <div className="mb-4 grid gap-3 md:grid-cols-3">

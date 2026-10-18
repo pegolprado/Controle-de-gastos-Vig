@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { CheckCircle2, GitMerge, XCircle } from 'lucide-react'
 import { useState } from 'react'
-import { api } from '../../api/client'
+import { reciprocalMatch, validate } from '../../engine/crossmatch'
 import { useCase } from '../../app/layout'
 import { Badge, Criteria, DrillLink, ErrorBox, Field, Loading, Notice, PageHeader } from '../../components/ui'
 import { EVENT_TYPE_LABEL, fmtDateTime, fmtInt, fmtNumber } from '../../lib/format'
@@ -15,8 +15,8 @@ export default function CrossMatch() {
   const [tol, setTol] = useState(60)
   const [dtol, setDtol] = useState(5)
   const [cls, setCls] = useState('')
-  const v = useQuery({ queryKey: ['xvalidate', c.id, sel], queryFn: () => api(`/cases/${c.id}/crossmatch/validate`, { body: { file_ids: sel } }) })
-  const m = useMutation({ mutationFn: () => api(`/cases/${c.id}/crossmatch/reciprocal`, { body: { file_ids: sel, tol_s: tol, dur_tol_s: dtol } }) })
+  const v = useQuery({ queryKey: ['xvalidate', c.id, sel], queryFn: () => validate(sel) as Promise<any> })
+  const m = useMutation({ mutationFn: () => reciprocalMatch(sel.length ? { file_ids: sel } : {}, tol, dtol) as Promise<any> })
   return (
     <div>
       <PageHeader
@@ -25,7 +25,7 @@ export default function CrossMatch() {
         subtitle="Relaciona registros de arquivos diferentes (inclusive de operadoras diferentes). Ex.: a chamada A→B aparece na bilhetagem de A (originada) e na de B (recebida). Antes de cruzar, valide identificadores, fusos, períodos, duplicidades e proveniência."
       />
       <div className="card mb-4 grid gap-4 p-4 md:grid-cols-[1fr_auto_auto_auto] md:items-end">
-        <Field label="Arquivos (vazio = todos os do caso)">
+        <Field label="Arquivos (vazio = todos os da análise)">
           <select multiple className="h-24 w-full" value={sel.map(String)} onChange={(e) => setSel(Array.from(e.target.selectedOptions).map((o) => +o.value))}>
             {files.map((f: any) => (
               <option key={f.id} value={f.id}>

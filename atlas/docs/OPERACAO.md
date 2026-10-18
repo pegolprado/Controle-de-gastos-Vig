@@ -1,61 +1,36 @@
-# Operação: backup, restauração, monitoramento e retenção
+# Operação
+
+## Usuários
+- Criar o primeiro administrador: `docker compose exec api python -m app.cli create-admin --email ... --name "..."`.
+- Demais usuários: tela **Usuários** (somente administradores). Cada novo usuário recebe um **link de ativação** de
+  uso único (72 h) — entregue por canal seguro. Sem SMTP configurado, o administrador também gera os links de
+  redefinição de senha.
+- Por usuário: perfil (Administrador/Usuário), **pode exportar**, desativar, desbloquear, encerrar sessões, excluir.
 
 ## Backup
-
-`scripts/backup.sh` gera um pacote com o banco (`pg_dump` formato custom), todos os arquivos originais e
-relatórios, e um manifesto `SHA256SUMS`. Com `BACKUP_PASSPHRASE` definida, o pacote é cifrado (GPG, AES-256).
+O servidor guarda apenas a lista de usuários.
 
 ```bash
-cd ~/Controle-de-gastos-Vig/atlas
-BACKUP_PASSPHRASE='frase-longa-guardada-em-cofre' ./scripts/backup.sh --docker ~/backups
+./scripts/backup.sh ~/backups                       # cópia consistente do SQLite + SHA-256
+BACKUP_PASSPHRASE='...' ./scripts/backup.sh ~/bkp    # cifrado com GPG (AES-256)
+./scripts/restore.sh ~/backups/marx-usuarios-AAAAMMDDTHHMMSSZ.db
 ```
 
-Agendamento diário (crontab do usuário `atlas`):
+Agendamento diário (crontab do usuário `marx`):
+`15 3 * * * cd ~/Controle-de-gastos-Vig/atlas && BACKUP_PASSPHRASE=... ./scripts/backup.sh ~/backups`
 
-```
-17 3 * * * cd ~/Controle-de-gastos-Vig/atlas && BACKUP_PASSPHRASE=$(cat ~/.atlas-backup-pass) ./scripts/backup.sh --docker ~/backups >> ~/backups/log 2>&1 && find ~/backups -name 'atlas-backup-*' -mtime +30 -delete
-```
-
-Copie os backups para fora do servidor (outro provedor ou mídia institucional). Guarde a frase em cofre de senhas:
-sem ela o backup cifrado não pode ser restaurado.
-
-## Restauração
-
+## Atualização
 ```bash
-BACKUP_PASSPHRASE=... ./scripts/restore.sh --docker ~/backups/atlas-backup-AAAAMMDDTHHMMSSZ.tar.gz.gpg
+cd ~/Controle-de-gastos-Vig && git pull && cd atlas && ./scripts/backup.sh ~/backups && docker compose up -d --build
 ```
+Usuários com uma análise aberta durante a atualização continuam trabalhando; ao recarregar a página recebem a nova
+versão (e a análise em memória é apagada, como sempre).
 
-A restauração confere o `SHA256SUMS` antes de alterar qualquer coisa, para a API e o worker, substitui banco e
-arquivos e religa os serviços.
-
-### Teste de restauração
-
-`scripts/test_backup_restore.sh` faz um backup, restaura num banco novo e compara contagens de tabelas, os hashes
-de todos os arquivos originais e a cadeia de auditoria. Rode-o periodicamente (ex.: mensalmente) em ambiente de teste.
-Resultado registrado em [TESTES.md](TESTES.md).
-
-## Monitoramento
-
-- *Monitoramento operacional* (perfil administrador): tamanho do banco e dos arquivos, fila de tarefas, falhas
-  recentes, último sinal do worker e limites configurados.
-- `GET /api/health` para monitoramento externo (retorna também tarefas paradas há mais de 5 minutos).
-- Logs: `docker compose logs -f api worker web`.
-- Tarefas interrompidas (queda do worker) voltam sozinhas para a fila até 3 vezes; a reimportação é idempotente
-  (registros parciais da tentativa anterior são removidos antes).
-
-## Retenção e descarte
-
-Cada caso pode ter data de retenção. *Verificar retenção* lista os casos vencidos; a exclusão é feita caso a caso,
-exigindo digitar o código do caso e justificar, e fica registrada na auditoria. Não há descarte automático.
-
-## Auditoria
-
-A trilha é encadeada por hash (cada linha guarda o hash da anterior). *Auditoria → Verificar integridade da trilha*
-recalcula a cadeia e aponta a primeira linha adulterada. Pela linha de comando: `docker compose exec api python -m app.cli verify-audit`.
-
-## Escala
-
-- Mais tarefas simultâneas: `docker compose up -d --scale worker=3` (a fila usa `SKIP LOCKED`).
-- `WEB_WORKERS` no `.env` define os processos da API.
-- Para volumes muito grandes, aumente RAM do PostgreSQL (`shared_buffers`, `work_mem`) e considere particionar
-  `events` por caso (ver ARQUITETURA.md).
+## Problemas comuns
+| Sintoma | Causa provável / ação |
+|---|---|
+| Certificado não emitido | DNS ainda não aponta para o servidor, ou portas 80/443 fechadas. `docker compose logs web`. |
+| “Sessão expirada” e análise apagada | Inatividade maior que `IDLE_MINUTES` ou sessão maior que `SESSION_MINUTES`. Ajuste no `.env`. |
+| Navegador lento com arquivo enorme | O processamento usa a memória do computador do usuário. Feche outras abas, use 8 GB+ de RAM, divida o arquivo por período. |
+| Mapa sem fundo | Provedor de tiles bloqueado ou `MAP_TILE_URL` vazio; as estações continuam desenhadas. |
+| Usuário bloqueado | Tentativas de senha erradas; **Usuários → Desbloquear**. |

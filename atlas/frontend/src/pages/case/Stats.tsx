@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { BarChart3 } from 'lucide-react'
 import { useState } from 'react'
-import { api } from '../../api/client'
+import { patterns, summary } from '../../engine/analytics'
 import { useCase } from '../../app/layout'
 import { BarsChart } from '../../components/charts'
 import { FilterBar } from '../../components/FilterBar'
@@ -13,8 +13,8 @@ export default function Stats() {
   const { c } = useCase()
   const [f, setF] = useUrlFilter()
   const [z, setZ] = useState(2.5)
-  const s = useQuery({ queryKey: ['summary', c.id, f], queryFn: () => api(`/cases/${c.id}/analytics/summary`, { body: { filter: f } }) })
-  const p = useQuery({ queryKey: ['patterns', c.id, f, z], queryFn: () => api(`/cases/${c.id}/analytics/patterns`, { body: { filter: f, z } }) })
+  const s = useQuery({ queryKey: ['summary', c.id, f], queryFn: () => summary(f) as Promise<any> })
+  const p = useQuery({ queryKey: ['patterns', c.id, f, z], queryFn: () => patterns(f, z) as Promise<any> })
   const t = s.data?.totals
   return (
     <div>

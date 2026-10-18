@@ -1,18 +1,19 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Pencil, Plus, Target as TargetIcon, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { api } from '../../api/client'
 import { useCase } from '../../app/layout'
-import { Badge, DrillLink, Empty, ErrorBox, Field, Loading, Modal, Notice, PageHeader } from '../../components/ui'
+import { Badge, DrillLink, Empty, ErrorBox, Field, Modal, Notice, PageHeader } from '../../components/ui'
+import { useSession } from '../../engine/session'
+import { deleteTarget, eventsPerTarget, saveTarget } from '../../engine/targets'
 import { fmtDate, fmtInt, fmtNumber } from '../../lib/format'
 
 const EMPTY = { number_original: '', operator: '', internal_id: '', label: '', period_start: '', period_end: '', source: '', notes: '', validation_status: 'pendente' }
 
 export default function Targets() {
   const { c, canWrite } = useCase()
-  const qc = useQueryClient()
-  const q = useQuery({ queryKey: ['targets', c.id], queryFn: () => api<any[]>(`/cases/${c.id}/targets`) })
+  const targets = useSession((s) => s.targets)
+  const counts = useQuery({ queryKey: ['targets-events', c.id], queryFn: eventsPerTarget })
   const [edit, setEdit] = useState<any | null>(null)
   const [err, setErr] = useState<unknown>(null)
   const save = async () => {
@@ -22,12 +23,10 @@ export default function Targets() {
     body.number_original = edit.number_original
     body.validation_status = edit.validation_status || 'pendente'
     try {
-      const r = edit.id ? await api(`/cases/${c.id}/targets/${edit.id}`, { method: 'PUT', body }) : await api(`/cases/${c.id}/targets`, { body })
-      r.warnings?.forEach((w: string) => toast.warning(w))
-      toast.success('Alvo salvo')
+      const warnings = await saveTarget(body)
+      warnings.forEach((w: string) => toast.warning(w))
+      toast.success('Alvo registrado na sessão')
       setEdit(null)
-      qc.invalidateQueries({ queryKey: ['targets', c.id] })
-      qc.invalidateQueries({ queryKey: ['meta', c.id] })
     } catch (e) {
       setErr(e)
     }
@@ -36,22 +35,18 @@ export default function Targets() {
     <div>
       <PageHeader
         icon={<TargetIcon className="h-5 w-5" />}
-        title="Alvos do caso"
+        title="Alvos da análise"
         subtitle="Números abrangidos pela autorização. A operadora informada é registrada como recebida: o sistema não deduz a operadora pelo prefixo, por causa da portabilidade numérica."
         actions={
           canWrite && (
             <button className="btn-primary" onClick={() => setEdit({ ...EMPTY })}>
-              <Plus className="h-4 w-4" /> Cadastrar alvo
+              <Plus className="h-4 w-4" /> Informar alvo
             </button>
           )
         }
       />
-      {q.isLoading ? (
-        <Loading />
-      ) : q.error ? (
-        <ErrorBox error={q.error} />
-      ) : q.data!.length === 0 ? (
-        <Empty title="Nenhum alvo cadastrado">Cadastre os números autorizados antes de importar as bilhetagens.</Empty>
+      {targets.length === 0 ? (
+        <Empty title="Nenhum alvo informado">Informe os números autorizados antes de carregar as bilhetagens.</Empty>
       ) : (
         <div className="card scroll-x">
           <table>
@@ -69,7 +64,7 @@ export default function Targets() {
               </tr>
             </thead>
             <tbody>
-              {q.data!.map((t) => (
+              {targets.map((t: any) => (
                 <tr key={t.id}>
                   <td className="font-mono">{fmtNumber(t.number_normalized)}</td>
                   <td className="text-xs text-muted">{t.number_original}</td>
@@ -78,14 +73,14 @@ export default function Targets() {
                     {t.label}
                   </td>
                   <td>{t.operator ?? '—'}</td>
-                  <td className="text-xs">{t.period_start ? `${fmtDate(t.period_start)} a ${fmtDate(t.period_end)}` : 'período do caso'}</td>
+                  <td className="text-xs">{t.period_start ? `${fmtDate(t.period_start)} a ${fmtDate(t.period_end)}` : 'período da análise'}</td>
                   <td className="text-xs text-muted">{t.source ?? '—'}</td>
                   <td>
                     <Badge tone={t.validation_status === 'validado' ? 'green' : 'amber'}>{t.validation_status}</Badge>
                   </td>
                   <td className="text-right tabular-nums">
                     <DrillLink caseId={c.id} filter={{ targets: [t.number_normalized] }}>
-                      {fmtInt(t.events)}
+                      {fmtInt(counts.data?.[t.number_normalized] ?? 0)}
                     </DrillLink>
                   </td>
                   <td className="whitespace-nowrap">
@@ -99,8 +94,7 @@ export default function Targets() {
                           aria-label="Remover"
                           onClick={async () => {
                             if (!confirm('Remover este alvo? Os registros importados não são apagados.')) return
-                            await api(`/cases/${c.id}/targets/${t.id}`, { method: 'DELETE' })
-                            qc.invalidateQueries({ queryKey: ['targets', c.id] })
+                            await deleteTarget(t.id)
                           }}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -114,7 +108,7 @@ export default function Targets() {
           </table>
         </div>
       )}
-      <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? 'Editar alvo' : 'Cadastrar alvo'}>
+      <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? 'Editar alvo' : 'Informar alvo'}>
         {edit && (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Número (como recebido) *" className="sm:col-span-2" hint={edit.number_original ? `Será tratado como: ${fmtNumber(normalizePreview(edit.number_original))}` : 'Inclua o DDD.'}>
@@ -156,7 +150,7 @@ export default function Targets() {
             {c.period_start && (
               <div className="sm:col-span-2">
                 <Notice>
-                  Período autorizado do caso: {fmtDate(c.period_start)} a {fmtDate(c.period_end)}. Períodos maiores geram aviso e não ampliam o escopo.
+                  Período autorizado da análise: {fmtDate(c.period_start)} a {fmtDate(c.period_end)}. Períodos maiores geram aviso e não ampliam o escopo.
                 </Notice>
               </div>
             )}

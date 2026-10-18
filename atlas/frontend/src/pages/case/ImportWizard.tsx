@@ -1,10 +1,10 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { ArrowLeft, ArrowRight, CheckCircle2, Play, RefreshCw, Wand2, XCircle } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { api } from '../../api/client'
+import { analyze as analyzeFile, cancelImport, createImport, preview as previewImport, runImport, saveDraft, saveProfile } from '../../engine/importer'
+import { useSession } from '../../engine/session'
 import { useCase } from '../../app/layout'
 import { Badge, ErrorBox, Field, Loading, Notice, PageHeader, Progress } from '../../components/ui'
 import { EVENT_TYPE_LABEL, fmtBytes, fmtInt, fmtNumber, shortHash } from '../../lib/format'
@@ -24,12 +24,10 @@ const ERB_GROUPS: [string, string[]][] = [
 const TZS = ['America/Sao_Paulo', 'America/Manaus', 'America/Cuiaba', 'America/Belem', 'America/Fortaleza', 'America/Recife', 'America/Rio_Branco', 'America/Noronha', 'UTC']
 
 export default function ImportWizard() {
-  const { c, meta } = useCase()
+  const { meta } = useCase()
   const { fileId } = useParams()
   const [sp] = useSearchParams()
-  const qc = useQueryClient()
-  const files = useQuery({ queryKey: ['files', c.id], queryFn: () => api<any[]>(`/cases/${c.id}/files`) })
-  const file = files.data?.find((f) => String(f.id) === fileId)
+  const file = useSession((s) => s.files.find((f) => String(f.id) === fileId))
   const [kind, setKind] = useState(sp.get('tipo') === 'erb_registry' ? 'erb_registry' : 'cdr')
   const [step, setStep] = useState(0)
   const [read, setRead] = useState<any>({})
@@ -41,13 +39,12 @@ export default function ImportWizard() {
   const [profileName, setProfileName] = useState('')
   const [importId, setImportId] = useState<number | null>(null)
   const [preview, setPreview] = useState<any>(null)
-  const [jobId, setJobId] = useState<number | null>(null)
 
   const analyze = async (r = read, k = kind) => {
     setAnalyzing(true)
     setErr(null)
     try {
-      const a = await api(`/cases/${c.id}/files/${fileId}/analyze`, { body: { kind: k, read: r } })
+      const a: any = await analyzeFile(+fileId!, k as any, r)
       setAnalysis(a)
       setMapping(a.suggested_mapping)
       const o: any = { ...opts, operator: opts.operator ?? file?.operator_declared ?? a.operator_detection.operator ?? '' }
@@ -71,15 +68,16 @@ export default function ImportWizard() {
   const validate = async () => {
     setErr(null)
     setPreview(null)
-    const body = { file_id: +fileId!, kind, mapping, options: { ...opts, read }, save_profile: profileName || null }
+    const options = { ...opts, read }
     try {
       let id = importId
-      if (id) await api(`/cases/${c.id}/imports/${id}`, { method: 'PUT', body })
+      if (id) saveDraft(id, mapping, options)
       else {
-        id = (await api(`/cases/${c.id}/imports`, { body })).id
+        id = createImport(+fileId!, kind as any, mapping, options).id
         setImportId(id)
       }
-      setPreview(await api(`/cases/${c.id}/imports/${id}/preview`, { method: 'POST' }))
+      if (profileName.trim()) saveProfile(columns, profileName.trim(), kind as any, mapping, options)
+      setPreview(await previewImport(id))
     } catch (e) {
       setErr(e)
     }
@@ -87,28 +85,15 @@ export default function ImportWizard() {
   const run = async () => {
     setErr(null)
     try {
-      const r = await api(`/cases/${c.id}/imports/${importId}/run`, { method: 'POST' })
-      setJobId(r.job.id)
       setStep(5)
-      toast.success('Processamento iniciado')
+      await runImport(importId!)
+      toast.success('Processamento concluído')
     } catch (e) {
       setErr(e)
     }
   }
-  const job = useQuery({
-    queryKey: ['job', jobId],
-    queryFn: () => api(`/jobs/${jobId}`),
-    enabled: !!jobId,
-    refetchInterval: (q) => (q.state.data && ['done', 'failed', 'cancelled'].includes(q.state.data.status) ? false : 1000),
-  })
-  const imp = useQuery({ queryKey: ['import', importId, job.data?.status], queryFn: () => api(`/cases/${c.id}/imports/${importId}`), enabled: !!importId && job.data?.status === 'done' })
-  useEffect(() => {
-    if (job.data?.status === 'done') {
-      qc.invalidateQueries({ queryKey: ['files', c.id] })
-      qc.invalidateQueries({ queryKey: ['case', String(c.id)] })
-      qc.invalidateQueries({ queryKey: ['meta', String(c.id)] })
-    }
-  }, [job.data?.status, qc, c.id])
+  const job = useSession((s) => s.imports.find((i) => i.id === importId))
+  const imp = { data: job?.status === 'done' ? job : undefined }
 
   const groups = kind === 'cdr' ? CDR_GROUPS : ERB_GROUPS
   const fields: Record<string, string> = analysis?.fields ?? {}
@@ -117,8 +102,7 @@ export default function ImportWizard() {
   const typeValues: string[] = analysis?.event_type_values ?? []
   const used = useMemo(() => new Set(Object.values(mapping).filter(Boolean)), [mapping])
 
-  if (files.isLoading) return <Loading />
-  if (!file) return <ErrorBox error="Arquivo não encontrado neste caso." />
+  if (!file) return <ErrorBox error="Arquivo não encontrado nesta análise (os arquivos ficam só na memória da aba; recarregar a página apaga tudo)." />
   const det = analysis?.operator_detection
   const setO = (k: string, v: any) => setOpts((o: any) => ({ ...o, [k]: v }))
 
@@ -219,7 +203,7 @@ export default function ImportWizard() {
                 ))}
               </select>
             </Field>
-            {analysis.profile && <Notice tone="green">Estrutura reconhecida: mapeamento salvo “{analysis.profile.name}” aplicado. Revise antes de processar.</Notice>}
+            {analysis.profile && <Notice tone="green">Estrutura reconhecida: mapeamento “{analysis.profile.name}” desta sessão aplicado. Revise antes de processar.</Notice>}
             {analysis.table.preamble?.length > 0 && (
               <details className="text-xs">
                 <summary className="cursor-pointer text-muted">Texto antes do cabeçalho (metadados do documento)</summary>
@@ -313,7 +297,7 @@ export default function ImportWizard() {
             ))}
           </div>
           <div className="card p-4">
-            <Field label="Salvar este mapeamento para arquivos com a mesma estrutura (opcional)" hint="Identificado pela assinatura dos cabeçalhos; reaplicado automaticamente e sempre revisável.">
+            <Field label="Reaproveitar este mapeamento nesta sessão (opcional)" hint="Aplicado automaticamente a outros arquivos com os mesmos cabeçalhos enquanto a aba estiver aberta; nada é gravado.">
               <input className="w-full" placeholder="ex.: TIM — extrato de chamadas (modelo 2026)" value={profileName} onChange={(e) => setProfileName(e.target.value)} />
             </Field>
           </div>
@@ -526,21 +510,21 @@ export default function ImportWizard() {
         </div>
       )}
 
-      {step === 5 && job.data && (
+      {step === 5 && job && (
         <div className="card space-y-4 p-6">
           <div className="flex items-center justify-between">
             <div className="font-mono text-sm">
-              Tarefa #{job.data.id} · <b>{job.data.status}</b>
+              Importação #{job.id} · <b>{({ done: 'concluída', running: 'processando', failed: 'falhou', cancelled: 'cancelada', draft: 'rascunho' } as Record<string, string>)[job.status] ?? job.status}</b>
             </div>
-            {['queued', 'running'].includes(job.data.status) && (
-              <button className="btn-danger !py-1 text-xs" onClick={() => api(`/cases/${c.id}/jobs/${jobId}/cancel`, { method: 'POST' })}>
+            {job.status === 'running' && (
+              <button className="btn-danger !py-1 text-xs" onClick={() => cancelImport(job.id)}>
                 <XCircle className="h-4 w-4" /> Cancelar
               </button>
             )}
           </div>
-          <Progress value={job.data.status === 'done' ? 1 : job.data.progress} tone={job.data.status === 'failed' ? 'red' : job.data.status === 'done' ? 'green' : 'blue'} />
-          <div className="text-sm text-muted">{job.data.message}</div>
-          {job.data.status === 'failed' && <ErrorBox error={job.data.message} />}
+          <Progress value={job.status === 'done' ? 1 : job.progress} tone={job.status === 'failed' ? 'red' : job.status === 'done' ? 'green' : 'blue'} />
+          <div className="text-sm text-muted">{job.message}</div>
+          {job.status === 'failed' && <ErrorBox error={job.message} />}
           {imp.data && (
             <>
               <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">

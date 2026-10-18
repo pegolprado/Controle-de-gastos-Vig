@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import { api } from '../../api/client'
 import { ROLE_LABEL, useAuth } from '../../app/auth'
 import { Badge, ErrorBox, Field, Loading, Modal, Notice, PageHeader } from '../../components/ui'
-import { fmtDateTime } from '../../lib/format'
 
 function LinkBox({ link }: { link: string }) {
   return (
@@ -23,7 +22,7 @@ export default function AdminUsers() {
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['admin-users'], queryFn: () => api<any[]>('/admin/users'), enabled: me?.role === 'admin' })
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ email: '', name: '', role: 'analyst', admin_content_access: false })
+  const [form, setForm] = useState({ email: '', name: '', role: 'user', can_export: true })
   const [link, setLink] = useState<string | null>(null)
   const [err, setErr] = useState<unknown>(null)
   const patch = useMutation({
@@ -46,8 +45,8 @@ export default function AdminUsers() {
     <div>
       <PageHeader
         icon={<UsersIcon className="h-5 w-5" />}
-        title="Usuários e permissões"
-        subtitle="Perfis globais limitam o que cada pessoa pode fazer; o acesso ao conteúdo de um caso depende de ser membro dele. Administradores não veem casos automaticamente, salvo quando a opção de acesso ao conteúdo estiver marcada."
+        title="Usuários"
+        subtitle="O servidor guarda apenas a lista de usuários (senhas com Argon2id). Nenhuma consulta, arquivo ou resultado é enviado ou gravado: cada pessoa vê somente o que ela mesma carregou na própria aba, e nem o administrador tem acesso a isso."
         actions={
           <button className="btn-primary" onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4" /> Novo usuário
@@ -76,7 +75,6 @@ export default function AdminUsers() {
                 <th>Perfil</th>
                 <th>Situação</th>
                 <th>MFA</th>
-                <th>Último acesso</th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -93,18 +91,15 @@ export default function AdminUsers() {
                         </option>
                       ))}
                     </select>
-                    {u.role === 'admin' && (
-                      <label className="mt-1 flex items-center gap-1 text-xs text-muted">
-                        <input type="checkbox" checked={u.admin_content_access} onChange={(e) => patch.mutate({ id: u.id, body: { admin_content_access: e.target.checked } })} /> acesso ao conteúdo dos casos
-                      </label>
-                    )}
+                    <label className="mt-1 flex items-center gap-1 text-xs text-muted">
+                      <input type="checkbox" checked={u.can_export} onChange={(e) => patch.mutate({ id: u.id, body: { can_export: e.target.checked } })} /> pode exportar (Excel/PDF/CSV)
+                    </label>
                   </td>
                   <td>
                     {u.locked ? <Badge tone="red">bloqueado</Badge> : u.is_active ? <Badge tone="green">ativo</Badge> : <Badge>inativo</Badge>}
                     {u.must_change_password && <Badge tone="amber" className="ml-1">senha pendente</Badge>}
                   </td>
                   <td>{u.mfa_enabled ? <Badge tone="green">ativa</Badge> : <Badge>—</Badge>}</td>
-                  <td className="text-xs">{fmtDateTime(u.last_login_at?.slice(0, 19))}</td>
                   <td>
                     <div className="flex flex-wrap gap-1">
                       <button className="btn-ghost !px-2 !py-1 text-xs" onClick={() => action(u.id, 'reset-link')}>
@@ -121,6 +116,22 @@ export default function AdminUsers() {
                       {u.id !== me.id && (
                         <button className="btn-ghost !px-2 !py-1 text-xs" onClick={() => patch.mutate({ id: u.id, body: { is_active: !u.is_active } })}>
                           {u.is_active ? 'Desativar' : 'Reativar'}
+                        </button>
+                      )}
+                      {u.id !== me.id && (
+                        <button
+                          className="btn-ghost !px-2 !py-1 text-xs hover:!text-danger"
+                          onClick={async () => {
+                            if (!confirm(`Excluir o usuário ${u.email}?`)) return
+                            try {
+                              await api(`/admin/users/${u.id}`, { method: 'DELETE' })
+                              qc.invalidateQueries({ queryKey: ['admin-users'] })
+                            } catch (e: any) {
+                              toast.error(e.message)
+                            }
+                          }}
+                        >
+                          Excluir
                         </button>
                       )}
                     </div>
@@ -141,7 +152,7 @@ export default function AdminUsers() {
               const r = await api('/admin/users', { body: form })
               setLink(r.activation_link)
               setOpen(false)
-              setForm({ email: '', name: '', role: 'analyst', admin_content_access: false })
+              setForm({ email: '', name: '', role: 'user', can_export: true })
               qc.invalidateQueries({ queryKey: ['admin-users'] })
             } catch (e) {
               setErr(e)
@@ -163,6 +174,9 @@ export default function AdminUsers() {
               ))}
             </select>
           </Field>
+          <label className="flex items-center gap-2 text-sm text-muted">
+            <input type="checkbox" checked={form.can_export} onChange={(e) => setForm({ ...form, can_export: e.target.checked })} /> Pode exportar resultados (Excel, PDF, CSV)
+          </label>
           {err ? <ErrorBox error={err} /> : null}
           <button className="btn-primary w-full">Criar e gerar link de ativação</button>
         </form>

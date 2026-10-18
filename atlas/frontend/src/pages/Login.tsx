@@ -24,7 +24,7 @@ function AuthCard({ title, children }: { title: string; children: React.ReactNod
           <h2 className="mb-4 text-lg font-bold text-white">{title}</h2>
           {children}
         </div>
-        <p className="mt-6 text-center text-xs text-faint">Acesso restrito a usuários autorizados. Todas as operações são registradas em trilha de auditoria.</p>
+        <p className="mt-6 text-center text-xs text-faint">Acesso restrito a usuários autorizados. Seus arquivos e consultas são processados só no seu navegador e apagados ao sair — nada fica salvo.</p>
       </div>
     </div>
   )

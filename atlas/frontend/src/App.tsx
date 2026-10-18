@@ -7,12 +7,8 @@ import Login, { ForgotPassword, ResetPassword } from './pages/Login'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Catalog = lazy(() => import('./pages/Catalog'))
-const Cases = lazy(() => import('./pages/Cases'))
-const CaseForm = lazy(() => import('./pages/CaseForm'))
-const Audit = lazy(() => import('./pages/Audit'))
 const SettingsPage = lazy(() => import('./pages/Settings'))
 const AdminUsers = lazy(() => import('./pages/admin/Users'))
-const AdminOps = lazy(() => import('./pages/admin/Operations'))
 const Overview = lazy(() => import('./pages/case/Overview'))
 const Targets = lazy(() => import('./pages/case/Targets'))
 const Files = lazy(() => import('./pages/case/Files'))
@@ -33,7 +29,6 @@ const CrossMatch = lazy(() => import('./pages/case/CrossMatch'))
 const Alerts = lazy(() => import('./pages/case/Alerts'))
 const Reports = lazy(() => import('./pages/case/Reports'))
 const Assistant = lazy(() => import('./pages/case/Assistant'))
-const Members = lazy(() => import('./pages/case/Members'))
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { me, loading } = useAuth()
@@ -61,15 +56,10 @@ export default function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="ferramentas" element={<Catalog />} />
-            <Route path="casos" element={<Cases />} />
-            <Route path="casos/novo" element={<CaseForm />} />
-            <Route path="auditoria" element={<Audit />} />
             <Route path="configuracoes" element={<SettingsPage />} />
             <Route path="admin/usuarios" element={<AdminUsers />} />
-            <Route path="admin/operacao" element={<AdminOps />} />
-            <Route path="casos/:caseId" element={<CaseLayout />}>
+            <Route path="analise" element={<CaseLayout />}>
               <Route index element={<Overview />} />
-              <Route path="editar" element={<CaseForm />} />
               <Route path="alvos" element={<Targets />} />
               <Route path="arquivos" element={<Files />} />
               <Route path="importar/:fileId" element={<ImportWizard />} />
@@ -89,8 +79,8 @@ export default function App() {
               <Route path="alertas" element={<Alerts />} />
               <Route path="relatorios" element={<Reports />} />
               <Route path="assistente" element={<Assistant />} />
-              <Route path="membros" element={<Members />} />
             </Route>
+            <Route path="casos/*" element={<Navigate to="/analise" replace />} />
             <Route path="*" element={<div className="py-20 text-center text-muted">Página não encontrada.</div>} />
           </Route>
         </Routes>

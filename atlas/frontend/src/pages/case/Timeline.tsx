@@ -1,9 +1,11 @@
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Clock, StickyNote, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { api } from '../../api/client'
+import { useAuth } from '../../app/auth'
+import { timeline } from '../../engine/analytics'
+import { addAnnotation, deleteAnnotation } from '../../engine/annotations'
 import { useCase } from '../../app/layout'
 import { BarsChart } from '../../components/charts'
 import { FilterBar } from '../../components/FilterBar'
@@ -13,7 +15,7 @@ import { useUrlFilter } from '../../lib/useUrlFilter'
 
 export default function Timeline() {
   const { c, canWrite, meta } = useCase()
-  const qc = useQueryClient()
+  const { me } = useAuth()
   const navigate = useNavigate()
   const [f, setF] = useUrlFilter()
   const [bucket, setBucket] = useState<'day' | 'hour'>('day')
@@ -22,7 +24,7 @@ export default function Timeline() {
   const [note, setNote] = useState<{ ts: string; number: string; text: string } | null>(null)
   const q = useQuery({
     queryKey: ['timeline', c.id, f, bucket, gap, page],
-    queryFn: () => api(`/cases/${c.id}/analytics/timeline`, { body: { filter: f, bucket, gap_hours: gap, page, size: 200 } }),
+    queryFn: () => timeline(f, bucket, gap, page, 200) as Promise<any>,
     placeholderData: keepPreviousData,
   })
   const targets: string[] = (meta?.targets ?? []).map((t: any) => t.number)
@@ -156,8 +158,7 @@ export default function Timeline() {
                           className="text-muted hover:text-danger"
                           aria-label="Remover anotação"
                           onClick={async () => {
-                            await api(`/cases/${c.id}/annotations/${r.a.id}`, { method: 'DELETE' })
-                            qc.invalidateQueries({ queryKey: ['timeline', c.id] })
+                            await deleteAnnotation(r.a.id)
                           }}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -190,9 +191,8 @@ export default function Timeline() {
               disabled={!note.ts || note.text.length < 2}
               onClick={async () => {
                 try {
-                  await api(`/cases/${c.id}/annotations`, { body: { ts_utc: note.ts + ':00-03:00', number: note.number || null, text: note.text } })
+                  await addAnnotation(note.ts, note.number || null, note.text, me?.name ?? 'analista')
                   setNote(null)
-                  qc.invalidateQueries({ queryKey: ['timeline', c.id] })
                 } catch (e: any) {
                   toast.error(e.message)
                 }

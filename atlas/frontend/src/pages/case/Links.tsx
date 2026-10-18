@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import cytoscape, { type Core } from 'cytoscape'
 import { Download, Network } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { api } from '../../api/client'
+import { ExportButtons } from '../../components/Export'
+import { linkGraph } from '../../engine/analytics'
 import { useCase } from '../../app/layout'
 import { FilterBar } from '../../components/FilterBar'
 import { Badge, Criteria, DrillLink, ErrorBox, Field, Loading, Notice, PageHeader } from '../../components/ui'
@@ -20,7 +21,7 @@ export default function Links() {
   const [sel, setSel] = useState<any>(null)
   const q = useQuery({
     queryKey: ['graph', c.id, f, center, depth, minEvents, reciprocal],
-    queryFn: () => api(`/cases/${c.id}/analytics/graph`, { body: { filter: f, center: center || null, depth, min_events: minEvents, reciprocal_only: reciprocal } }),
+    queryFn: () => linkGraph(f, center || null, depth, minEvents, reciprocal) as Promise<any>,
   })
   const box = useRef<HTMLDivElement>(null)
   const cy = useRef<Core | null>(null)
@@ -61,10 +62,9 @@ export default function Links() {
   }, [q.data, hideLeaves])
   const exportPng = async () => {
     if (!cy.current) return
-    await api(`/cases/${c.id}/exports/log`, { body: { kind: 'grafo_png', filters: f } })
     const a = document.createElement('a')
     a.href = cy.current.png({ bg: '#0b0f1a', full: true, scale: 2 })
-    a.download = `${c.code}-grafo.png`
+    a.download = 'MARX-grafo-de-vinculos.png'
     a.click()
   }
   return (
@@ -80,10 +80,27 @@ export default function Links() {
                 <Download className="h-4 w-4" /> PNG
               </button>
             )}
-            {c.can_export && q.data && (
-              <button className="btn-ghost" onClick={() => api(`/cases/${c.id}/exports/log`, { body: { kind: 'grafo_csv', filters: f } }).then(() => exportCsv(q.data, c.code))}>
-                <Download className="h-4 w-4" /> CSV da rede
-              </button>
+            {q.data && (
+              <ExportButtons
+                build={() => ({
+                  title: 'Vínculos documentados',
+                  subtitle: `${q.data.nodes.length} números · ${q.data.edges.length} conexões`,
+                  columns: [
+                    { key: 'n1', label: 'Número 1', fmt: (v) => fmtNumber(v) },
+                    { key: 'n2', label: 'Número 2', fmt: (v) => fmtNumber(v) },
+                    { key: 'events', label: 'Eventos' },
+                    { key: 'days', label: 'Dias' },
+                    { key: 'n1_to_n2', label: '1→2' },
+                    { key: 'n2_to_n1', label: '2→1' },
+                    { key: 'reciprocal', label: 'Recíproca', fmt: (v) => (v ? 'sim' : 'não') },
+                    { key: 'call_seconds', label: 'Duração (s)' },
+                    { key: 'first_event', label: 'Primeiro' },
+                    { key: 'last_event', label: 'Último' },
+                  ],
+                  rows: q.data.edges,
+                  criteria: q.data.criteria,
+                })}
+              />
             )}
           </>
         }
@@ -182,15 +199,4 @@ export default function Links() {
       {q.data && <Criteria criteria={q.data.criteria} />}
     </div>
   )
-}
-
-function exportCsv(data: any, code: string) {
-  const head = 'numero_1;numero_2;eventos;dias;1_para_2;2_para_1;reciproca;duracao_s;primeiro;ultimo;arquivos'
-  const lines = data.edges.map((e: any) => [e.n1, e.n2, e.events, e.days, e.n1_to_n2, e.n2_to_n1, e.reciprocal ? 'sim' : 'nao', e.call_seconds, e.first_event, e.last_event, e.file_ids.join(',')].join(';'))
-  const crit = `# filtros: ${JSON.stringify(data.criteria.filters)} · regras ${data.criteria.rules_version}`
-  const blob = new Blob(['\ufeff' + [crit, head, ...lines].join('\n')], { type: 'text/csv;charset=utf-8' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = `${code}-rede-de-contatos.csv`
-  a.click()
 }

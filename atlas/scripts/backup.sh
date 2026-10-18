@@ -1,34 +1,23 @@
 #!/usr/bin/env bash
-# Backup completo: banco (pg_dump formato custom) + arquivos originais/relatórios + manifesto SHA-256.
-# Uso direto:   PGURL=postgresql://user:senha@host/atlas STORAGE_DIR=/caminho ./scripts/backup.sh [destino]
-# Com Docker:   ./scripts/backup.sh --docker [destino]
-# Se BACKUP_PASSPHRASE estiver definida, o pacote é cifrado com GPG (AES-256).
+# Backup da ÚNICA coisa que o servidor guarda: a lista de usuários (SQLite).
+# Não há arquivos, consultas nem relatórios no servidor para copiar.
+# Uso (na pasta atlas, com o Docker rodando):   ./scripts/backup.sh [destino]
+# Se BACKUP_PASSPHRASE estiver definida, a cópia é cifrada com GPG (AES-256).
 set -euo pipefail
-DOCKER=0
-if [[ "${1:-}" == "--docker" ]]; then DOCKER=1; shift; fi
 DEST="${1:-./backups}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
-mkdir -p "$DEST" "$WORK/atlas-backup-$STAMP"
-OUT="$WORK/atlas-backup-$STAMP"
-
-if [[ $DOCKER == 1 ]]; then
-  docker compose exec -T db pg_dump -U atlas -d atlas -Fc --no-owner > "$OUT/db.dump"
-  docker compose exec -T api tar -C /data -cf - storage > "$OUT/storage.tar"
-else
-  : "${PGURL:?defina PGURL}" "${STORAGE_DIR:?defina STORAGE_DIR}"
-  pg_dump "$PGURL" -Fc --no-owner -f "$OUT/db.dump"
-  tar -C "$(dirname "$STORAGE_DIR")" -cf "$OUT/storage.tar" "$(basename "$STORAGE_DIR")"
-fi
-(cd "$OUT" && sha256sum db.dump storage.tar > SHA256SUMS)
-echo "criado_em=$STAMP" > "$OUT/INFO"
-tar -C "$WORK" -czf "$DEST/atlas-backup-$STAMP.tar.gz" "atlas-backup-$STAMP"
-FINAL="$DEST/atlas-backup-$STAMP.tar.gz"
+mkdir -p "$DEST"
+OUT="$DEST/marx-usuarios-$STAMP.db"
+docker compose exec -T api python -c "
+import sqlite3, sys
+src = sqlite3.connect('/data/marx-usuarios.db'); dst = sqlite3.connect('/tmp/copia.db')
+src.backup(dst); dst.close(); sys.stdout.buffer.write(open('/tmp/copia.db','rb').read())
+" > "$OUT"
+sha256sum "$OUT" > "$OUT.sha256"
 if [[ -n "${BACKUP_PASSPHRASE:-}" ]]; then
-  gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" --symmetric --cipher-algo AES256 -o "$FINAL.gpg" "$FINAL"
-  rm -f "$FINAL"
-  FINAL="$FINAL.gpg"
+  gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" --symmetric --cipher-algo AES256 -o "$OUT.gpg" "$OUT"
+  rm -f "$OUT"
+  echo "backup cifrado: $OUT.gpg"
+else
+  echo "backup: $OUT"
 fi
-chmod 600 "$FINAL"
-echo "$FINAL"

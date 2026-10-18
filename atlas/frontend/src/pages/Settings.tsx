@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { api } from '../api/client'
 import { ROLE_LABEL, useAuth } from '../app/auth'
 import { ErrorBox, Field, Notice, PageHeader } from '../components/ui'
+import { RULES_VERSION } from '../engine/normalize'
 
 export default function SettingsPage() {
   const { me, refresh } = useAuth()
@@ -31,7 +32,7 @@ export default function SettingsPage() {
               <div>
                 <dt className="label">Versão do sistema / regras</dt>
                 <dd className="font-mono">
-                  {sys.data.app_version} / {sys.data.rules_version}
+                  {sys.data.app_version} / {RULES_VERSION}
                 </dd>
               </div>
               <div>
@@ -40,7 +41,13 @@ export default function SettingsPage() {
               </div>
               <div className="md:col-span-2">
                 <dt className="label">Mapa</dt>
-                <dd className="font-mono text-xs break-all text-muted">{sys.data.map_tile_url}</dd>
+                <dd className="font-mono text-xs break-all text-muted">{sys.data.map_tile_url || 'desativado (sem camada de mapa externa)'}</dd>
+              </div>
+              <div className="md:col-span-2">
+                <dt className="label">Privacidade das análises</dt>
+                <dd className="text-muted">
+                  Os arquivos e resultados são processados somente no seu navegador e ficam na memória desta aba. O servidor não recebe nem grava arquivos, consultas ou relatórios. Sair, fechar a aba, recarregar ou ficar {sys.data.idle_minutes} minutos sem atividade apaga tudo.
+                </dd>
               </div>
             </dl>
           )}

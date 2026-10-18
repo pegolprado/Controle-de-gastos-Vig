@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { Send, Sparkles } from 'lucide-react'
 import { useState } from 'react'
-import { api } from '../../api/client'
+import { answer } from '../../engine/assistant'
 import { useCase } from '../../app/layout'
 import { Badge, DrillLink, ErrorBox, Loading, Notice, PageHeader } from '../../components/ui'
 
@@ -24,11 +24,11 @@ const EXAMPLES = [
 ]
 
 export default function Assistant() {
-  const { c } = useCase()
+  const { c, meta } = useCase()
   const [q, setQ] = useState('')
   const [history, setHistory] = useState<{ q: string; r: any }[]>([])
   const m = useMutation({
-    mutationFn: (question: string) => api(`/cases/${c.id}/assistant`, { body: { question } }),
+    mutationFn: (question: string) => answer(question, (meta?.targets ?? []).map((t: any) => t.number)) as Promise<any>,
     onSuccess: (r, question) => setHistory((h) => [{ q: question, r }, ...h]),
   })
   return (
@@ -48,7 +48,7 @@ export default function Assistant() {
           if (q.trim().length >= 3) m.mutate(q)
         }}
       >
-        <input className="flex-1" placeholder="Pergunte sobre os registros deste caso…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="flex-1" placeholder="Pergunte sobre os registros desta análise…" value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="btn-primary" disabled={m.isPending}>
           <Send className="h-4 w-4" /> Perguntar
         </button>

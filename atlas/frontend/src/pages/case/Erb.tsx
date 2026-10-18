@@ -1,9 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Database, Play, RadioTower } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { api } from '../../api/client'
+import { candidatesFor, cells as erbCells, cellsByPeriod, registry } from '../../engine/analytics'
+import { manualResolution, resolveErb } from '../../engine/erb'
+import { setState as setSession, useSession } from '../../engine/session'
 import { useCase } from '../../app/layout'
 import { FilterBar } from '../../components/FilterBar'
 import { Badge, Criteria, DrillLink, ErrorBox, Field, Loading, Modal, Notice, PageHeader, Progress, Tabs } from '../../components/ui'
@@ -48,7 +50,7 @@ export default function Erb() {
 function CellsTab() {
   const { c } = useCase()
   const [f, setF] = useUrlFilter()
-  const q = useQuery({ queryKey: ['erb-cells', c.id, f], queryFn: () => api(`/cases/${c.id}/erb/cells`, { body: { filter: f } }) })
+  const q = useQuery({ queryKey: ['erb-cells', c.id, f], queryFn: () => erbCells(f) as Promise<any> })
   return (
     <>
       <FilterBar value={f} onChange={setF} />
@@ -116,26 +118,11 @@ function CellsTab() {
 
 function ResolutionTab() {
   const { c, canWrite } = useCase()
-  const qc = useQueryClient()
-  const runs = useQuery({ queryKey: ['erb-runs', c.id], queryFn: () => api<any[]>(`/cases/${c.id}/erb/runs`) })
-  const reg = useQuery({ queryKey: ['registry', c.id, 'versions'], queryFn: () => api(`/cases/${c.id}/erb/registry?size=1`) })
-  const pending = useQuery({ queryKey: ['erb-cells', c.id, 'pending'], queryFn: () => api(`/cases/${c.id}/erb/cells`, { body: { filter: { resolution: ['ambiguous', 'none', 'probable'] } } }) })
+  const runs = { data: useSession((s) => s.resolutionRuns) }
+  const reg = useQuery({ queryKey: ['registry', c.id, 'versions'], queryFn: () => registry(null, null, null, 1, 1) as Promise<any> })
+  const pending = useQuery({ queryKey: ['erb-cells', c.id, 'pending'], queryFn: () => erbCells({ resolution: ['ambiguous', 'none', 'probable'] }) as Promise<any> })
   const [versions, setVersions] = useState<number[]>([])
-  const [jobId, setJobId] = useState<number | null>(null)
-  const job = useQuery({
-    queryKey: ['job', jobId],
-    queryFn: () => api(`/jobs/${jobId}`),
-    enabled: !!jobId,
-    refetchInterval: (q) => {
-      const st = q.state.data?.status
-      if (st && ['done', 'failed'].includes(st)) {
-        qc.invalidateQueries({ queryKey: ['erb-runs', c.id] })
-        qc.invalidateQueries({ queryKey: ['erb-cells', c.id] })
-        return false
-      }
-      return 1000
-    },
-  })
+  const [job, setJob] = useState<{ data: { status: string; progress: number } } | null>(null)
   const [review, setReview] = useState<any>(null)
   return (
     <div className="space-y-4">
@@ -156,14 +143,25 @@ function ResolutionTab() {
             </Field>
             <button
               className="btn-primary"
+              disabled={job?.data.status === 'running'}
               onClick={async () => {
-                const r = await api(`/cases/${c.id}/erb/resolve`, { body: { version_ids: versions.length ? versions : null } })
-                setJobId(r.id)
+                setJob({ data: { status: 'running', progress: 0.3 } })
+                setSession({ busy: { label: 'Resolvendo identificadores de ERB', progress: 0 } })
+                try {
+                  await resolveErb(versions.length ? versions : null)
+                  setJob({ data: { status: 'done', progress: 1 } })
+                  toast.success('Resolução concluída')
+                } catch (e: any) {
+                  setJob({ data: { status: 'failed', progress: 1 } })
+                  toast.error(e?.message ?? String(e))
+                } finally {
+                  setSession({ busy: null })
+                }
               }}
             >
               <Play className="h-4 w-4" /> Executar resolução
             </button>
-            {job.data && (
+            {job && (
               <div className="w-64">
                 <Progress value={job.data.status === 'done' ? 1 : job.data.progress} tone={job.data.status === 'failed' ? 'red' : 'blue'} />
                 <div className="mt-1 text-xs text-faint">{job.data.status}</div>
@@ -191,7 +189,7 @@ function ResolutionTab() {
               <tr key={r.id}>
                 <td className="font-mono text-xs">{r.id}</td>
                 <td className="text-xs">{fmtDateTime(r.created_at.slice(0, 19))}</td>
-                <td className="text-xs">{r.user_name ?? 'sistema'}</td>
+                <td className="text-xs">{'você'}</td>
                 <td className="text-xs">{r.result.versions?.map((v: any) => `#${v.id}`).join(', ') || '—'}</td>
                 <td className="text-right">{r.result.signatures}</td>
                 <td>
@@ -201,7 +199,7 @@ function ResolutionTab() {
                     </Badge>
                   ))}
                 </td>
-                <td className="font-mono text-xs">{r.rules_version}</td>
+                <td className="font-mono text-xs">{r.result.rules_version}</td>
               </tr>
             ))}
           </tbody>
@@ -254,16 +252,14 @@ function ResolutionTab() {
 }
 
 function ManualReview({ cell, onClose }: { cell: any; onClose: () => void }) {
-  const { c } = useCase()
-  const qc = useQueryClient()
-  const cands = useQuery({ queryKey: ['cands', cell.cell_key], queryFn: () => api<any[]>(`/cases/${c.id}/erb/candidates?cell_key=${encodeURIComponent(cell.cell_key)}`) })
+  useCase()
+  const cands = useQuery({ queryKey: ['cands', cell.cell_key], queryFn: () => candidatesFor(cell.cell_key) as Promise<any[]> })
   const [choice, setChoice] = useState<number | null>(null)
   const [note, setNote] = useState('')
   const m = useMutation({
-    mutationFn: () => api(`/cases/${c.id}/erb/manual`, { body: { cell_key: cell.cell_key, erb_cell_id: choice, note } }),
+    mutationFn: () => manualResolution(cell.cell_key, choice, note),
     onSuccess: (r: any) => {
-      toast.success(`Revisão registrada em ${r.events} eventos`)
-      qc.invalidateQueries({ queryKey: ['erb-cells', c.id] })
+      toast.success(`Revisão aplicada em ${r.events} eventos`)
       onClose()
     },
     onError: (e: any) => toast.error(e.message),
@@ -331,13 +327,13 @@ function ManualReview({ cell, onClose }: { cell: any; onClose: () => void }) {
 }
 
 function PeriodsTab() {
-  const { c, meta } = useCase()
+  const { meta } = useCase()
   const span = meta?.span ?? []
   const [p, setP] = useState({ a0: span[0]?.slice(0, 10) ?? '', a1: '', b0: '', b1: span[1]?.slice(0, 10) ?? '' })
   const [target, setTarget] = useState('')
   const m = useMutation({
     mutationFn: () =>
-      api(`/cases/${c.id}/erb/cells-by-period`, { body: { filter: target ? { targets: [target] } : {}, period1: [p.a0 + 'T00:00:00', p.a1 + 'T23:59:59'], period2: [p.b0 + 'T00:00:00', p.b1 + 'T23:59:59'] } }),
+      cellsByPeriod(target ? { targets: [target] } : {}, [p.a0 + 'T00:00:00', p.a1 + 'T23:59:59'], [p.b0 + 'T00:00:00', p.b1 + 'T23:59:59']) as Promise<any>,
   })
   return (
     <>
@@ -405,7 +401,7 @@ function PeriodsTab() {
 
 function IssuesTab() {
   const { c } = useCase()
-  const reg = useQuery({ queryKey: ['registry', c.id, 'problems'], queryFn: () => api(`/cases/${c.id}/erb/registry?size=200&page=1`) })
+  const reg = useQuery({ queryKey: ['registry', c.id, 'problems'], queryFn: () => registry(null, null, null, 1, 200) as Promise<any> })
   if (reg.isLoading) return <Loading />
   if (reg.error) return <ErrorBox error={reg.error} />
   const bad = reg.data.items.filter((x: any) => x.validation_status !== 'ok')

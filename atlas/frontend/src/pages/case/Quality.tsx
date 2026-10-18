@@ -1,17 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, ShieldCheck, XCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { api } from '../../api/client'
+import { cells as erbCells, summary } from '../../engine/analytics'
+import { validate } from '../../engine/crossmatch'
+import { useSession } from '../../engine/session'
 import { useCase } from '../../app/layout'
 import { Badge, DrillLink, ErrorBox, Loading, PageHeader, Stat } from '../../components/ui'
 import { fmtDateTime, fmtInt, shortHash } from '../../lib/format'
 
 export default function Quality() {
   const { c } = useCase()
-  const v = useQuery({ queryKey: ['xvalidate', c.id], queryFn: () => api(`/cases/${c.id}/crossmatch/validate`, { body: {} }) })
-  const s = useQuery({ queryKey: ['summary-all', c.id], queryFn: () => api(`/cases/${c.id}/analytics/summary`, { body: { filter: { include_duplicates: true, include_out_of_scope: true } } }) })
-  const imps = useQuery({ queryKey: ['imports', c.id], queryFn: () => api<any[]>(`/cases/${c.id}/imports`) })
-  const cells = useQuery({ queryKey: ['erb-cells', c.id, {}], queryFn: () => api(`/cases/${c.id}/erb/cells`, { body: { filter: {} } }) })
+  const v = useQuery({ queryKey: ['xvalidate', c.id], queryFn: () => validate([]) as Promise<any> })
+  const s = useQuery({ queryKey: ['summary-all', c.id], queryFn: () => summary({ include_duplicates: true, include_out_of_scope: true }) })
+  const imps = { data: useSession((x) => x.imports) }
+  const cells = useQuery({ queryKey: ['erb-cells', c.id, {}], queryFn: () => erbCells({}) })
   if (v.isLoading || s.isLoading) return <Loading />
   if (v.error) return <ErrorBox error={v.error} />
   const t = s.data?.totals
@@ -30,7 +32,7 @@ export default function Quality() {
         <section className="card p-5">
           <h2 className="section-title mb-4 text-muted">Checagens para cruzamento</h2>
           <ul className="space-y-3">
-            {v.data.checks.map((ch: any) => (
+            {v.data!.checks.map((ch: any) => (
               <li key={ch.check} className="flex items-start gap-3">
                 {ch.ok ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-ok" /> : <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber" />}
                 <div>
@@ -79,7 +81,7 @@ export default function Quality() {
             </tr>
           </thead>
           <tbody>
-            {v.data.files.map((f: any) => (
+            {v.data!.files.map((f: any) => (
               <tr key={f.file_id}>
                 <td className="text-xs">
                   #{f.file_id} {f.original_name}

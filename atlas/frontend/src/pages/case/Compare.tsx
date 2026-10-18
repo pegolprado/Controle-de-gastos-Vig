@@ -3,14 +3,14 @@ import clsx from 'clsx'
 import { GitCompare } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { api } from '../../api/client'
+import { coincidences, compareNumbers } from '../../engine/analytics'
 import { useCase } from '../../app/layout'
 import { SERIES } from '../../components/charts'
 import { Badge, Criteria, DrillLink, ErrorBox, Field, Loading, Notice, Num, PageHeader, Tabs } from '../../components/ui'
 import { EVENT_TYPE_LABEL, fmtDateTime, fmtDuration, fmtInt, fmtNumber, WEEKDAYS } from '../../lib/format'
 
 export default function Compare() {
-  const { c, meta } = useCase()
+  const { meta } = useCase()
   const [sp] = useSearchParams()
   const [tab, setTab] = useState(sp.get('aba') ?? 'atividade')
   const targets: any[] = meta?.targets ?? []
@@ -20,9 +20,9 @@ export default function Compare() {
   const [mode, setMode] = useState<'any' | 'cell' | 'site'>('any')
   const [siteM, setSiteM] = useState(200)
   const all = [...nums, ...extra.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean)]
-  const cmp = useMutation({ mutationFn: () => api(`/cases/${c.id}/analytics/compare-numbers`, { body: { numbers: all, window_s: win } }) })
+  const cmp = useMutation({ mutationFn: () => compareNumbers(all, {}, win) as Promise<any> })
   const coin = useMutation({
-    mutationFn: () => api(`/cases/${c.id}/analytics/coincidences`, { body: { numbers: all, window_s: win, same_cell: mode === 'cell', same_site_m: mode === 'site' ? siteM : null } }),
+    mutationFn: () => coincidences(all, {}, win, mode === 'cell', 1000, mode === 'site' ? siteM : null) as Promise<any>,
   })
   const run = () => (tab === 'coincidencias' ? coin.mutate() : cmp.mutate())
   return (

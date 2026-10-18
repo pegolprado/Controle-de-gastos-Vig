@@ -15,8 +15,8 @@ from .config import settings
 
 _ph = PasswordHasher()  # Argon2id com parâmetros padrão recomendados
 
-SESSION_COOKIE = "atlas_session"
-CSRF_COOKIE = "atlas_csrf"
+SESSION_COOKIE = "marx_session"
+CSRF_COOKIE = "marx_csrf"
 CSRF_HEADER = "x-csrf-token"
 
 

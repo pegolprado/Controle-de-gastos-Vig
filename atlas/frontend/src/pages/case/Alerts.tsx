@@ -1,8 +1,8 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Play, Settings2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { api } from '../../api/client'
+import { deleteRule, ensureDefaultRules, reviewAlert, RULE_TYPES, runRules, saveRule } from '../../engine/alerts'
+import { setState as setSession, useSession } from '../../engine/session'
 import { useCase } from '../../app/layout'
 import { Badge, DrillLink, Empty, ErrorBox, Field, Loading, Modal, Notice, PageHeader } from '../../components/ui'
 import { fmtDateTime } from '../../lib/format'
@@ -12,35 +12,19 @@ const STATUS: Record<string, string> = { pendente: 'Pendente', em_analise: 'Em a
 
 export default function Alerts() {
   const { c, canWrite, canReview } = useCase()
-  const qc = useQueryClient()
   const [status, setStatus] = useState('')
   const [sev, setSev] = useState('')
   const [rulesOpen, setRulesOpen] = useState(false)
-  const [running, setRunning] = useState<number | null>(null)
-  const q = useQuery({ queryKey: ['alerts', c.id, status, sev], queryFn: () => api<any[]>(`/cases/${c.id}/alerts?${new URLSearchParams({ ...(status && { status }), ...(sev && { severity: sev }) })}`) })
-  useQuery({
-    queryKey: ['job', running],
-    queryFn: async () => {
-      const j = await api(`/jobs/${running}`)
-      if (['done', 'failed'].includes(j.status)) {
-        setRunning(null)
-        qc.invalidateQueries({ queryKey: ['alerts', c.id] })
-        if (j.status === 'done') toast.success(`Regras executadas: ${Object.values(j.result.created ?? {}).reduce((a: number, b: any) => a + b, 0)} novos alertas`)
-        else toast.error(j.message)
-      }
-      return j
-    },
-    enabled: !!running,
-    refetchInterval: 1000,
-  })
-  const review = async (id: number, review_status: string, analyst_note?: string) => {
-    try {
-      await api(`/cases/${c.id}/alerts/${id}`, { method: 'PUT', body: { review_status, analyst_note } })
-      qc.invalidateQueries({ queryKey: ['alerts', c.id] })
-    } catch (e: any) {
-      toast.error(e.message)
-    }
-  }
+  const [running, setRunning] = useState(false)
+  useEffect(() => ensureDefaultRules(), [])
+  const all = useSession((s) => s.alerts)
+  const items = useMemo(() => {
+    const order: Record<string, number> = { alta: 0, media: 1, baixa: 2 }
+    return all.filter((a) => (!status || a.review_status === status) && (!sev || a.severity === sev)).sort((a, b) => (order[a.severity] ?? 3) - (order[b.severity] ?? 3) || b.id - a.id)
+  }, [all, status, sev])
+  const q = { isLoading: false, error: null, data: items }
+  void c
+  const review = (id: number, review_status: string, analyst_note?: string) => reviewAlert(id, review_status, analyst_note ?? null)
   return (
     <div>
       <PageHeader
@@ -57,8 +41,17 @@ export default function Alerts() {
                 className="btn-primary"
                 disabled={!!running}
                 onClick={async () => {
-                  const j = await api(`/cases/${c.id}/alerts/run`, { body: {} })
-                  setRunning(j.id)
+                  setRunning(true)
+                  setSession({ busy: { label: 'Executando regras de alerta', progress: 0 } })
+                  try {
+                    const r = await runRules()
+                    toast.success(`Regras executadas: ${Object.values(r.created).reduce((a, b) => a + b, 0)} novos alertas`)
+                  } catch (e: any) {
+                    toast.error(e?.message ?? String(e))
+                  } finally {
+                    setSession({ busy: null })
+                    setRunning(false)
+                  }
                 }}
               >
                 <Play className="h-4 w-4" /> {running ? 'Executando…' : 'Executar regras'}
@@ -148,19 +141,18 @@ function AlertCard({ a, canReview, onReview, caseId }: { a: any; canReview: bool
 }
 
 function RulesModal({ onClose }: { onClose: () => void }) {
-  const { c } = useCase()
-  const qc = useQueryClient()
-  const q = useQuery({ queryKey: ['alert-rules', c.id], queryFn: () => api(`/cases/${c.id}/alert-rules`) })
+  const rules = useSession((s) => s.rules)
+  const q = { isLoading: false, data: { rules, types: RULE_TYPES } }
   const [edit, setEdit] = useState<any>(null)
   const [err, setErr] = useState<unknown>(null)
   const save = async () => {
     setErr(null)
     try {
       const body = { name: edit.name, rule_type: edit.rule_type, params: JSON.parse(edit.paramsText || '{}'), severity: edit.severity, active: edit.active }
-      if (edit.id) await api(`/cases/${c.id}/alert-rules/${edit.id}`, { method: 'PUT', body })
-      else await api(`/cases/${c.id}/alert-rules`, { body })
+      if (!body.name?.trim()) throw new Error('Informe o nome da regra.')
+      if (!RULE_TYPES[body.rule_type]) throw new Error('Tipo de regra inválido.')
+      saveRule({ ...body, id: edit.id })
       setEdit(null)
-      qc.invalidateQueries({ queryKey: ['alert-rules', c.id] })
     } catch (e) {
       setErr(e)
     }
@@ -195,6 +187,9 @@ function RulesModal({ onClose }: { onClose: () => void }) {
                   <td>
                     <button className="btn-ghost !px-2 !py-1 text-xs" onClick={() => setEdit({ ...r, paramsText: JSON.stringify(r.params) })}>
                       Editar
+                    </button>
+                    <button className="btn-ghost !px-2 !py-1 text-xs hover:!text-danger" onClick={() => confirm('Excluir esta regra e os alertas gerados por ela?') && deleteRule(r.id)}>
+                      Excluir
                     </button>
                   </td>
                 </tr>
