@@ -1,0 +1,25 @@
+name: Sonda B3 (temporário)
+on:
+  push:
+    branches: [claude/finance-os-app-768to0]
+    paths: [.github/workflows/probe-b3.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          b() { printf '%s' "$1" | base64 -w0; }
+          get() { echo "=== $1"; curl -sS -m 30 -A 'Mozilla/5.0' "$1" | head -c "${2:-1500}"; echo; }
+          L=https://sistemaswebb3-listados.b3.com.br
+          get "$L/listedCompaniesProxy/CompanyCall/GetListedSupplementCompany/$(b '{"issuingCompany":"PETR","language":"pt-br"}')" 2500
+          get "$L/listedCompaniesProxy/CompanyCall/GetListedCashDividends/$(b '{"language":"pt-br","pageNumber":1,"pageSize":5,"tradingName":"PETROBRAS"}')" 1500
+          get "$L/listedCompaniesProxy/CompanyCall/GetListedSupplementCompany/$(b '{"issuingCompany":"TAEE","language":"pt-br"}')" 1800
+          get "$L/listedCompaniesProxy/CompanyCall/GetListedSupplementCompany/$(b '{"issuingCompany":"ITSA","language":"pt-br"}')" 1200
+          get "https://cotacao.b3.com.br/mds/api/v1/instrumentQuotation/HGLG11" 1200
+          get "https://cotacao.b3.com.br/mds/api/v1/DailyFluctuationHistory/HGLG11" 600
+          get "$L/fundsProxy/fundsCall/GetDetailFundSIG/$(b '{"typeFund":7,"cnpj":"0","identifierFund":"HGLG"}')" 800
+          get "$L/fundsProxy/fundsCall/GetFundDetail/$(b '{"typeFund":7,"identifierFund":"HGLG"}')" 800
+          get "https://brapi.dev/api/quote/HGLG11" 500
