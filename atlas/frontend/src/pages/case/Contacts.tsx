@@ -7,7 +7,7 @@ import { comparePeriods, contacts } from '../../engine/analytics'
 import { useCase } from '../../app/layout'
 import { FilterBar } from '../../components/FilterBar'
 import { Badge, Criteria, DrillLink, ErrorBox, Field, Loading, Notice, Num, PageHeader, Tabs } from '../../components/ui'
-import { fmtDate, fmtDateTime, fmtDuration, fmtInt, fmtNumber } from '../../lib/format'
+import { fmtDate, fmtDateTime, fmtDuration, fmtInt, fmtNumberPlain } from '../../lib/format'
 import { useUrlFilter } from '../../lib/useUrlFilter'
 
 export default function Contacts() {
@@ -51,8 +51,8 @@ function Frequency() {
               build={() => ({
                 title: 'Contatos recorrentes',
                 columns: [
-                  { key: 'target_number', label: 'Alvo', fmt: (v) => fmtNumber(v) },
-                  { key: 'other_number', label: 'Interlocutor', fmt: (v) => fmtNumber(v) },
+                  { key: 'target_number', label: 'Alvo', fmt: (v) => fmtNumberPlain(v) },
+                  { key: 'other_number', label: 'Interlocutor', fmt: (v) => fmtNumberPlain(v) },
                   { key: 'events', label: 'Eventos' },
                   { key: 'days', label: 'Dias' },
                   { key: 'outgoing', label: 'Originados' },

@@ -7,13 +7,14 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview --port 4173",
-    "typecheck": "tsc -b --pretty",
+    "typecheck": "tsc -b --pretty && tsc -p server/tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
     "vendor": "node scripts/copy-vendor.mjs",
     "predev": "node scripts/copy-vendor.mjs",
     "prebuild": "node scripts/copy-vendor.mjs",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "local": "wrangler pages dev dist --d1 DB --binding SECRET_KEY=chave-local-de-teste-0123456789-abcdefghijkl --binding SETUP_TOKEN=configuracao-teste-123 --binding COOKIE_INSECURE=1 --port 8788"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "^1.33.1-dev57.0",
@@ -41,6 +42,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261018.1",
     "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.56.1",
     "@tailwindcss/vite": "^4.3.3",
@@ -58,6 +60,7 @@
     "typescript": "5.9",
     "typescript-eslint": "^8.71.2",
     "vite": "^8.3.4",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "wrangler": "^4.151.1"
   }
 }

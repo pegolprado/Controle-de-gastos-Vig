@@ -1,0 +1,26 @@
+# Cabeçalhos de segurança do Cloudflare Pages (aplicados às páginas e arquivos do site).
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' blob: data:; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+
+# Código do site (nomes com hash) pode ficar em cache: não contém dados de análise.
+/assets/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable
+/vendor/tesseract/*
+  ! Cache-Control
+  Cache-Control: public, max-age=604800
+/vendor/duckdb/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable
+/vendor/duckdb/manifest.json
+  ! Cache-Control
+  Cache-Control: no-cache

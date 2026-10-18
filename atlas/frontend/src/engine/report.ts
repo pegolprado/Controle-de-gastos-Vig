@@ -5,7 +5,7 @@
  * arquivos de entrada, versão do sistema e das regras. O arquivo é entregue como
  * download; nada é guardado no servidor nem no navegador.
  */
-import { fmtDate, fmtDateTime, fmtDuration, fmtNumber } from '../lib/format'
+import { fmtDate, fmtDateTime, fmtDuration, fmtNumberPlain } from '../lib/format'
 import * as A from './analytics'
 import { q } from './db'
 import { addSheet, BRAND, COLORS, download, type ExportFormat, newPdf, pageDecor, pdfText, reportCode, safeName, TABLE_STYLE, type Who } from './exporter'
@@ -210,7 +210,7 @@ export async function renderPdf(data: Record<string, any>): Promise<ArrayBuffer>
       ])
       H2('Números analisados')
       table(['Número', 'Original', 'Identificação', 'Operadora informada', 'Período'],
-        data.targets.map((t: any) => [fmtNumber(t.number), t.original, t.label || t.internal_id || '—', t.operator || '—', `${fmtDate(t.period[0])} a ${fmtDate(t.period[1])}`]))
+        data.targets.map((t: any) => [fmtNumberPlain(t.number), t.original, t.label || t.internal_id || '—', t.operator || '—', `${fmtDate(t.period[0])} a ${fmtDate(t.period[1])}`]))
       small(`Critérios: ${JSON.stringify(data.criteria.filters) === '{}' ? 'sem filtros adicionais' : JSON.stringify(data.criteria.filters)}`)
     } else if (s === 'fontes') {
       Hd(s)
@@ -249,14 +249,14 @@ export async function renderPdf(data: Record<string, any>): Promise<ArrayBuffer>
     } else if (s === 'contatos' && data.contacts) {
       Hd(s)
       table(['Alvo', 'Interlocutor', 'Eventos', 'Dias', 'Orig.', 'Rec.', 'Chamadas', 'SMS', 'Duração', 'Primeiro', 'Último'],
-        data.contacts.items.slice(0, 60).map((r: any) => [fmtNumber(r.target_number), fmtNumber(r.other_number), r.events, r.days, r.outgoing, r.incoming, r.calls, r.sms, fmtDuration(r.call_seconds), fmtDateTime(r.first_event), fmtDateTime(r.last_event)]),
+        data.contacts.items.slice(0, 60).map((r: any) => [fmtNumberPlain(r.target_number), fmtNumberPlain(r.other_number), r.events, r.days, r.outgoing, r.incoming, r.calls, r.sms, fmtDuration(r.call_seconds), fmtDateTime(r.first_event), fmtDateTime(r.last_event)]),
         { styles: { ...TABLE_STYLE.styles, fontSize: 6.5 } })
       small(data.contacts.criteria.note)
     } else if (s === 'eventos' && data.events) {
       Hd(s)
       if (data.events_truncated) small(`Exibidos os primeiros ${data.events.length} eventos de ${tot.events}. A relação completa acompanha a exportação em Excel/CSV.`)
       table(['ID', 'Data/hora', 'Fuso', 'Tipo', 'Origem', 'Destino', 'Dur.', 'Célula', 'Fonte'],
-        data.events.map((e: any) => [e.id, fmtDateTime(e.ts_local), tz(e.tz_status), EVENT_TYPES[e.event_type] ?? e.event_type, fmtNumber(e.a_number), fmtNumber(e.b_number), fmtDuration(e.duration_s), e.cell_key || '—', `#${e.file_id} l.${e.row_number ?? '?'}${e.page ? ` p.${e.page}` : ''}`]),
+        data.events.map((e: any) => [e.id, fmtDateTime(e.ts_local), tz(e.tz_status), EVENT_TYPES[e.event_type] ?? e.event_type, fmtNumberPlain(e.a_number), fmtNumberPlain(e.b_number), fmtDuration(e.duration_s), e.cell_key || '—', `#${e.file_id} l.${e.row_number ?? '?'}${e.page ? ` p.${e.page}` : ''}`]),
         { styles: { ...TABLE_STYLE.styles, fontSize: 6.2 } })
     } else if (s === 'cadastro' && data.registry_versions) {
       Hd(s)
@@ -286,7 +286,7 @@ export async function renderPdf(data: Record<string, any>): Promise<ArrayBuffer>
     } else if (s === 'sequencia' && data.sequence?.items.length) {
       Hd(s)
       table(['Data/hora', 'Número', 'Tipo', 'Célula', 'Estação', 'Intervalo', 'Fonte coord.'],
-        data.sequence.items.slice(0, 200).map((r: any) => [fmtDateTime(r.ts_local), fmtNumber(r.target_number), EVENT_TYPES[r.event_type] ?? r.event_type, r.cell_key || '—', r.site_name || '—', r.interval_s === null ? '—' : fmtDuration(r.interval_s), r.coord_source || 'sem coordenada']),
+        data.sequence.items.slice(0, 200).map((r: any) => [fmtDateTime(r.ts_local), fmtNumberPlain(r.target_number), EVENT_TYPES[r.event_type] ?? r.event_type, r.cell_key || '—', r.site_name || '—', r.interval_s === null ? '—' : fmtDuration(r.interval_s), r.coord_source || 'sem coordenada']),
         { styles: { ...TABLE_STYLE.styles, fontSize: 6.3 } })
       small(data.sequence.criteria.note)
     } else if (s === 'inconsistencias' && data.cells) {
@@ -297,7 +297,7 @@ export async function renderPdf(data: Record<string, any>): Promise<ArrayBuffer>
     } else if (s === 'vinculos' && data.graph) {
       Hd(s)
       table(['Número 1', 'Número 2', 'Eventos', 'Dias', '1->2', '2->1', 'Recíproca', 'Duração', 'Primeiro', 'Último', 'Arquivos'],
-        data.graph.edges.slice(0, 80).map((e: any) => [fmtNumber(e.n1), fmtNumber(e.n2), e.events, e.days, e.n1_to_n2, e.n2_to_n1, e.reciprocal ? 'sim' : 'não', fmtDuration(e.call_seconds), fmtDateTime(e.first_event), fmtDateTime(e.last_event), (e.file_ids ?? []).map((x: number) => `#${x}`).join(', ')]),
+        data.graph.edges.slice(0, 80).map((e: any) => [fmtNumberPlain(e.n1), fmtNumberPlain(e.n2), e.events, e.days, e.n1_to_n2, e.n2_to_n1, e.reciprocal ? 'sim' : 'não', fmtDuration(e.call_seconds), fmtDateTime(e.first_event), fmtDateTime(e.last_event), (e.file_ids ?? []).map((x: number) => `#${x}`).join(', ')]),
         { styles: { ...TABLE_STYLE.styles, fontSize: 6.2 } })
       small(data.graph.criteria.note)
     } else if (s === 'grafo' && data.graph) {
@@ -310,9 +310,9 @@ export async function renderPdf(data: Record<string, any>): Promise<ArrayBuffer>
     } else if (s === 'contatos_comuns' && data.common) {
       Hd(s)
       const nums: string[] = data.common.numbers
-      const rows = data.common.shared.slice(0, 60).map((r: any) => [fmtNumber(r.contact), ...nums.map((n) => r.per_number[n]?.n ?? 0), r.total])
+      const rows = data.common.shared.slice(0, 60).map((r: any) => [fmtNumberPlain(r.contact), ...nums.map((n) => r.per_number[n]?.n ?? 0), r.total])
       if (!rows.length) P('Nenhum contato em comum entre os números analisados no período e filtros selecionados.')
-      else table(['Contato', ...nums.map((n) => fmtNumber(n)), 'Total'], rows)
+      else table(['Contato', ...nums.map((n) => fmtNumberPlain(n)), 'Total'], rows)
     } else if (s === 'limitacoes') {
       Hd(s)
       data.limitations.forEach((l: string) => P(`• ${l}`))
@@ -463,7 +463,7 @@ function schematicGraph(d: any, g: any, x: number, y: number, size: number) {
     d.setLineWidth(0.15)
     d.circle(px, py, n.is_target ? 2.2 : 1.3, 'FD')
     d.setTextColor(...COLORS.navy)
-    d.text(pdfText(fmtNumber(n.id) + (n.label ? ` (${n.label})` : '')), px + 2.4, py - 1)
+    d.text(pdfText(fmtNumberPlain(n.id) + (n.label ? ` (${n.label})` : '')), px + 2.4, py - 1)
   }
 }
 

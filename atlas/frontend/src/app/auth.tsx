@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api, ensureCsrf, onApiStatus } from '../api/client'
 import { resetDb } from '../engine/db'
 import { clearSession, getState } from '../engine/session'
+import { isLocked, lockScreen } from './privacy'
 
 export type Me = {
   id: number
@@ -66,7 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(
     () =>
       onApiStatus((status, path) => {
-        if (status === 401 && !path.startsWith('/auth/login') && !path.startsWith('/auth/mfa')) {
+        const publicPage = ['/login', '/esqueci-senha', '/redefinir-senha', '/primeiro-acesso'].some((p) => location.pathname.startsWith(p))
+        if (status === 401 && !publicPage && !path.startsWith('/auth/login') && !path.startsWith('/auth/mfa')) {
           qc.setQueryData(['me'], null)
           if (getState().files.length || getState().targets.length) void wipeAndReload('/login?motivo=expirada')
           else if (!location.pathname.startsWith('/login')) navigate('/login')
@@ -79,19 +81,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const last = useRef(Date.now())
   useEffect(() => {
     if (!me) return
+    // Atividade com a tela bloqueada não conta: o prazo para apagar continua correndo.
     const mark = () => {
-      last.current = Date.now()
+      if (!isLocked()) last.current = Date.now()
     }
-    const evs = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart', 'scroll']
+    const evs = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart', 'scroll', 'marx:activity']
     evs.forEach((e) => window.addEventListener(e, mark, { passive: true }))
     const limit = Math.max(1, me.idle_minutes || 30) * 60_000
+    // Bloqueia a tela após alguns minutos parado (sem apagar); apaga tudo ao atingir o limite.
+    const lockAfter = Math.min(5 * 60_000, limit / 2)
     const t = window.setInterval(() => {
-      if (getState().busy) last.current = Date.now()
-      if (Date.now() - last.current > limit) void logout('inatividade')
-    }, 15_000)
+      if (getState().busy && !isLocked()) last.current = Date.now()
+      const idle = Date.now() - last.current
+      if (idle > limit) void logout('inatividade')
+      else if (idle > lockAfter && !isLocked() && (getState().files.length || getState().targets.length)) lockScreen()
+    }, 5_000)
     // Mantém a sessão do servidor viva enquanto o usuário trabalha (sem enviar dados).
     const ping = window.setInterval(() => {
-      if (Date.now() - last.current < limit) api('/auth/me').catch(() => {})
+      if (!isLocked() && Date.now() - last.current < limit) api('/auth/me').catch(() => {})
     }, 5 * 60_000)
     return () => {
       evs.forEach((e) => window.removeEventListener(e, mark))

@@ -7,7 +7,7 @@ import { linkGraph } from '../../engine/analytics'
 import { useCase } from '../../app/layout'
 import { FilterBar } from '../../components/FilterBar'
 import { Badge, Criteria, DrillLink, ErrorBox, Field, Loading, Notice, PageHeader } from '../../components/ui'
-import { fmtDateTime, fmtDuration, fmtNumber } from '../../lib/format'
+import { fmtDateTime, fmtDuration, fmtNumber, fmtNumberPlain } from '../../lib/format'
 import { useUrlFilter } from '../../lib/useUrlFilter'
 
 export default function Links() {
@@ -86,8 +86,8 @@ export default function Links() {
                   title: 'Vínculos documentados',
                   subtitle: `${q.data.nodes.length} números · ${q.data.edges.length} conexões`,
                   columns: [
-                    { key: 'n1', label: 'Número 1', fmt: (v) => fmtNumber(v) },
-                    { key: 'n2', label: 'Número 2', fmt: (v) => fmtNumber(v) },
+                    { key: 'n1', label: 'Número 1', fmt: (v) => fmtNumberPlain(v) },
+                    { key: 'n2', label: 'Número 2', fmt: (v) => fmtNumberPlain(v) },
                     { key: 'events', label: 'Eventos' },
                     { key: 'days', label: 'Dias' },
                     { key: 'n1_to_n2', label: '1→2' },

@@ -46,7 +46,7 @@ export default function AdminUsers() {
       <PageHeader
         icon={<UsersIcon className="h-5 w-5" />}
         title="Usuários"
-        subtitle="O servidor guarda apenas a lista de usuários (senhas com Argon2id). Nenhuma consulta, arquivo ou resultado é enviado ou gravado: cada pessoa vê somente o que ela mesma carregou na própria aba, e nem o administrador tem acesso a isso."
+        subtitle="O servidor guarda apenas a lista de usuários (a senha nunca sai do navegador; o servidor guarda só uma impressão protegida dela). Nenhuma consulta, arquivo ou resultado é enviado ou gravado: cada pessoa vê somente o que ela mesma carregou na própria aba, e nem o administrador tem acesso a isso."
         actions={
           <button className="btn-primary" onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4" /> Novo usuário

@@ -4,7 +4,7 @@
  * Alertas apontam padrões que merecem revisão humana. Nunca classificam pessoas
  * como suspeitas ou culpadas.
  */
-import { fmtNumber } from '../lib/format'
+import { fmtNumberPlain } from '../lib/format'
 import { coincidences, comparePeriods, type EventFilter, where } from './analytics'
 import { q, q1 } from './db'
 import { quickHash } from './normalize'
@@ -85,7 +85,7 @@ export async function runRules(ruleIds: number[] | null = null) {
       const rows = await q(`SELECT target_number, CAST(ts_local AS DATE) AS day, count(*)::INTEGER AS n, list(id ORDER BY ts_local) AS ids
                               FROM events e WHERE ${w} GROUP BY 1, 2 HAVING count(*) > ${th} ORDER BY n DESC LIMIT 500`)
       for (const row of rows)
-        add([row.target_number, row.day], `${row.n} eventos de ${fmtNumber(row.target_number)} em ${day(row.day)}`,
+        add([row.target_number, row.day], `${row.n} eventos de ${fmtNumberPlain(row.target_number)} em ${day(row.day)}`,
           `Quantidade diária acima do limite configurado (${th}).`, row.ids, { threshold: th, number: row.target_number, day: row.day })
     } else if (r.rule_type === 'faixa_horaria') {
       const hf = Math.trunc(Number(prm.hour_from))
@@ -96,7 +96,7 @@ export async function runRules(ruleIds: number[] | null = null) {
                               FROM events e WHERE ${w2} GROUP BY 1, 2 HAVING count(*) >= ${th} ORDER BY n DESC LIMIT 500`)
       const pad = (h: number) => String(h).padStart(2, '0')
       for (const row of rows)
-        add([row.target_number, row.day, hf, ht], `${row.n} eventos entre ${hf}h e ${ht}h — ${fmtNumber(row.target_number)} em ${day(row.day)}`,
+        add([row.target_number, row.day, hf, ht], `${row.n} eventos entre ${hf}h e ${ht}h — ${fmtNumberPlain(row.target_number)} em ${day(row.day)}`,
           `Eventos na faixa ${pad(hf)}h–${pad(ht)}h (horário do documento) acima do limite (${th}).`, row.ids, { ...prm, number: row.target_number, day: row.day })
     } else if (r.rule_type === 'mudanca_frequencia') {
       let p1: [string, string]
@@ -123,7 +123,7 @@ export async function runRules(ruleIds: number[] | null = null) {
         if (!['aumentou', 'novo'].includes(it.status) || it.period2 < minEv) continue
         const ids = (await q(`SELECT id FROM events e WHERE ${where({ ...base, date_from: p2[0], date_to: p2[1] })}
                                 AND target_number = ${lit(it.target_number)} AND other_number = ${lit(it.other_number)} ORDER BY ts_local LIMIT 500`)).map((x) => x.id)
-        add([it.target_number, it.other_number, p1, p2], `Contato ${fmtNumber(it.other_number)} ${it.status} para ${fmtNumber(it.target_number)}`,
+        add([it.target_number, it.other_number, p1, p2], `Contato ${fmtNumberPlain(it.other_number)} ${it.status} para ${fmtNumberPlain(it.target_number)}`,
           `Taxa diária passou de ${it.rate1_per_day} para ${it.rate2_per_day} entre os períodos comparados.`, ids, { period1: p1, period2: p2, ...it })
       }
     } else if (r.rule_type === 'mesma_celula_janela') {
@@ -140,7 +140,7 @@ export async function runRules(ruleIds: number[] | null = null) {
       }
       const whereTxt = siteM ? `estações a até ${siteM} m` : 'mesma célula'
       for (const { key, ids } of groups.values())
-        add(key, `${fmtNumber(key[1])} e ${fmtNumber(key[2])} — ${key[0]} — ${day(key[3])}`,
+        add(key, `${fmtNumberPlain(key[1])} e ${fmtNumberPlain(key[2])} — ${key[0]} — ${day(key[3])}`,
           `Registros dos dois números (${whereTxt}) em janela de até ${win} s. Coincidência de registros de rede não indica presença física conjunta.`,
           [...new Set(ids)].sort((x, y) => x - y), { ...prm, place: key[0] })
     } else if (r.rule_type === 'divergencia_cadastro') {

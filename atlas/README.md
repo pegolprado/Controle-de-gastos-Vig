@@ -14,7 +14,9 @@ ERB, vínculos, linha do tempo e geolocalização, para uso em **iamarx.com.br**
   preciso carregar os arquivos e refazer as consultas.
 - Cada análise existe apenas na aba de quem a fez: **ninguém mais vê** — nem outros usuários, nem o administrador,
   nem o servidor.
-- O servidor guarda **somente a lista de usuários** (senhas com Argon2id). Toda a comunicação é por HTTPS.
+- O servidor guarda **somente a lista de usuários** — a senha nunca sai do navegador. Toda a comunicação é por HTTPS.
+- **Custo zero de hospedagem**: site, login e banco de usuários no plano gratuito da Cloudflare (ver DEPLOY.md).
+- **Bloquear tela** (pausa sem perder a análise) e **ocultar números** na tela para projeção/compartilhamento.
 
 ## Funcionalidades
 
@@ -29,8 +31,8 @@ relatório técnico rastreável (SHA-256 dos arquivos de entrada e do arquivo ge
 
 | Documento | Conteúdo |
 |---|---|
-| [docs/TESTAR-NO-COMPUTADOR.md](docs/TESTAR-NO-COMPUTADOR.md) | Testar no seu computador em ~15 minutos |
-| [docs/DEPLOY.md](docs/DEPLOY.md) | Publicar em iamarx.com.br (servidor + DNS no Registro.br) |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Publicar de graça em iamarx.com.br (Cloudflare + Registro.br) |
+| [docs/TESTAR-NO-COMPUTADOR.md](docs/TESTAR-NO-COMPUTADOR.md) | Testar antes de publicar |
 | [docs/OPERACAO.md](docs/OPERACAO.md) | Usuários, backup, atualização e problemas comuns |
 | [docs/SEGURANCA.md](docs/SEGURANCA.md) | Modelo de privacidade e controles de segurança |
 | [docs/ARQUITETURA.md](docs/ARQUITETURA.md) | Componentes e fluxo de dados |
@@ -41,8 +43,10 @@ relatório técnico rastreável (SHA-256 dos arquivos de entrada e do arquivo ge
 
 ```
 atlas/
-  backend/    servidor de login (FastAPI + SQLite: só usuários)
-  frontend/   aplicação React; src/engine = motor analítico que roda no navegador
-  deploy/     Caddy (HTTPS automático, cabeçalhos de segurança)
-  scripts/    backup/restauração da lista de usuários
+  frontend/
+    src/          aplicação React; src/engine = motor analítico que roda no navegador
+    server/       servidor de login (Cloudflare Functions + D1: só usuários)
+    functions/    ponto de entrada das Functions (/api/*)
+    public/       arquivos estáticos e _headers (CSP e cabeçalhos de segurança)
+  docs/           documentação
 ```

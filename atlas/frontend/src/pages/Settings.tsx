@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { api } from '../api/client'
 import { ROLE_LABEL, useAuth } from '../app/auth'
 import { ErrorBox, Field, Notice, PageHeader } from '../components/ui'
+import { assertStrong, deriveKey } from '../lib/passkey'
 import { RULES_VERSION } from '../engine/normalize'
 
 export default function SettingsPage() {
@@ -70,7 +71,9 @@ function ChangePassword({ onDone }: { onDone: () => void }) {
         setErr(null)
         if (n1 !== n2) return setErr(new Error('As novas senhas não conferem'))
         try {
-          await api('/auth/password/change', { body: { current: cur, new: n1 } })
+          assertStrong(n1)
+          const email = (await api<{ email: string }>('/auth/me')).email
+          await api('/auth/password/change', { body: { current: await deriveKey(email, cur), new: await deriveKey(email, n1) } })
           toast.success('Senha alterada; outras sessões foram encerradas')
           setCur('')
           setN1('')
@@ -162,7 +165,8 @@ function Mfa({ enabled, onChange }: { enabled: boolean; onChange: () => void }) 
             className="btn-danger sm:col-span-2"
             onClick={async () => {
               try {
-                await api('/auth/mfa/disable', { body: { password: pwd, code } })
+                const email = (await api<{ email: string }>('/auth/me')).email
+                await api('/auth/mfa/disable', { body: { key: await deriveKey(email, pwd), code } })
                 toast.success('Verificação em duas etapas desativada')
                 onChange()
               } catch (e) {

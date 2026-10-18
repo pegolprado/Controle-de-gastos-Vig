@@ -3,10 +3,7 @@
  * Nenhum dado é gravado em disco, enviado ao servidor ou mantido após fechar/sair.
  */
 import * as duckdb from '@duckdb/duckdb-wasm'
-import ehWasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url'
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url'
-import mvpWasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url'
-import mvpWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url'
 
 let dbP: Promise<{ db: duckdb.AsyncDuckDB; conn: duckdb.AsyncDuckDBConnection; worker: Worker }> | null = null
 
@@ -34,13 +31,39 @@ CREATE TABLE IF NOT EXISTS erb_cells (
 CREATE TABLE IF NOT EXISTS annotations (id INTEGER, ts_utc TIMESTAMP, number VARCHAR, text VARCHAR, author VARCHAR, created_at TIMESTAMP);
 `
 
+/**
+ * Baixa o motor (dividido em partes no próprio site), confere o SHA-256 e entrega uma URL local.
+ * Se o arquivo tiver sido alterado no caminho, o motor não é carregado.
+ */
+async function loadWasm(): Promise<string> {
+  const m: { sha256: string; size: number; parts: string[] } = await (await fetch('/vendor/duckdb/manifest.json', { cache: 'no-cache' })).json()
+  const bufs = await Promise.all(m.parts.map(async (p) => {
+    const r = await fetch(p)
+    if (!r.ok) throw new Error(`Falha ao carregar o motor analítico (${r.status})`)
+    return new Uint8Array(await r.arrayBuffer())
+  }))
+  const all = new Uint8Array(m.size)
+  let off = 0
+  for (const b of bufs) {
+    all.set(b, off)
+    off += b.length
+  }
+  const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', all))].map((b) => b.toString(16).padStart(2, '0')).join('')
+  if (off !== m.size || digest !== m.sha256) throw new Error('O motor analítico não passou na verificação de integridade. Recarregue a página.')
+  return URL.createObjectURL(new Blob([all], { type: 'application/wasm' }))
+}
+
 export async function getDb() {
   if (!dbP) {
     dbP = (async () => {
-      const bundle = await duckdb.selectBundle({ mvp: { mainModule: mvpWasm, mainWorker: mvpWorker }, eh: { mainModule: ehWasm, mainWorker: ehWorker } })
-      const worker = new Worker(bundle.mainWorker!)
+      const module = await loadWasm()
+      const worker = new Worker(ehWorker)
       const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker)
-      await db.instantiate(bundle.mainModule, bundle.pthreadWorker)
+      try {
+        await db.instantiate(module)
+      } finally {
+        URL.revokeObjectURL(module)
+      }
       await db.open({ path: ':memory:', query: { castBigIntToDouble: true, castTimestampToDate: false } })
       const conn = await db.connect()
       await conn.query(SCHEMA)

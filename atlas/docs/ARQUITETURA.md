@@ -1,40 +1,42 @@
 # Arquitetura
 
 ```
-Navegador do usuário (tudo em memória da aba)                         Servidor
-┌─────────────────────────────────────────────────────────────┐      ┌───────────────────────┐
-│ React (telas)                                               │ HTTPS│ Caddy (HTTPS, CSP)    │
-│  └─ src/engine                                              │◀────▶│  ├─ arquivos do site  │
-│      readers.ts    CSV/TXT/XLS/XLSX/JSON/XML/HTML/PDF/ZIP   │ login│  └─ /api → FastAPI    │
-│                    OCR (Tesseract WASM), SHA-256            │ only │       SQLite: usuários│
-│      importer.ts   mapeamento, normalização, duplicidades   │      └───────────────────────┘
-│      db.ts         DuckDB-WASM em memória (eventos, ERB)    │
-│      erb.ts        resolução de células (regras R1–R4)      │
-│      analytics.ts  contatos, vínculos, timeline, geo, stats │
-│      crossmatch.ts alerts.ts assistant.ts                   │
-│      report.ts exporter.ts   PDF (jsPDF) · Excel (ExcelJS)  │
-│      session.ts    estado da sessão (sem armazenamento)     │
-└─────────────────────────────────────────────────────────────┘
+Navegador do usuário (tudo em memória da aba)                    Cloudflare (plano gratuito)
+┌──────────────────────────────────────────────────────────┐     ┌──────────────────────────────┐
+│ React (telas)                                            │HTTPS│ Pages: arquivos do site       │
+│  └─ src/engine                                           │◀───▶│   (_headers: CSP, HSTS)       │
+│      readers.ts   CSV/TXT/XLS/XLSX/JSON/XML/HTML/PDF/ZIP │login│ Functions /api/* → server/app │
+│                   OCR (Tesseract WASM), SHA-256          │ só  │   sessão assinada, CSRF, MFA  │
+│      importer.ts  mapeamento, normalização, duplicidades │     │ D1: usuários (e nada mais)    │
+│      db.ts        DuckDB-WASM em memória                 │     └──────────────────────────────┘
+│      erb.ts analytics.ts crossmatch.ts alerts.ts ...     │
+│      report.ts exporter.ts  PDF · Excel · CSV            │
+│  lib/passkey.ts   senha → chave (PBKDF2 600 mil)         │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ## Fluxo
-1. Login → cookie de sessão. A API devolve só os dados do usuário (`/api/auth/me`).
-2. O usuário seleciona arquivos → o navegador calcula o SHA-256, detecta formato/layout e mostra amostra.
-3. O assistente de importação confirma mapeamento, formatos de data, fuso e regras; a prévia valida linha a linha.
-4. O processamento lê o arquivo em fluxo (lotes de 20 mil linhas) e grava no DuckDB em memória, mantendo o
-   vínculo com arquivo/linha/página e os valores originais.
+1. Login: o navegador pede o sal do e-mail, deriva a chave da senha (PBKDF2-SHA256, 600 mil iterações) e envia
+   só a chave. O servidor compara HMAC(SECRET_KEY, chave) com o valor guardado e devolve um cookie de sessão.
+2. O usuário seleciona arquivos → SHA-256, detecção de formato e amostra, tudo no navegador.
+3. O assistente confirma mapeamento, datas, fuso e regras; a prévia valida linha a linha.
+4. O processamento lê o arquivo em lotes de 20 mil linhas para o DuckDB em memória, mantendo arquivo/linha/página
+   e os valores originais.
 5. As telas consultam o DuckDB local; cada resultado traz os critérios usados.
-6. Exportações são geradas no navegador e baixadas; o SHA-256 do arquivo aparece na tela.
-7. Sair/inatividade/recarregar → banco e estado zerados, página recarregada.
+6. Exportações são geradas no navegador; o SHA-256 do arquivo aparece na tela.
+7. Sair/inatividade/recarregar → memória zerada e página recarregada.
+
+O motor DuckDB (36 MB) é publicado em partes de 20 MB (limite de 25 MB por arquivo do Pages gratuito); o navegador
+junta as partes e confere o SHA-256 antes de usar.
 
 ## Regras analíticas
-Versão das regras: `RULES_VERSION` (src/engine/normalize.ts), registrada em todo relatório.
+`RULES_VERSION` em `src/engine/normalize.ts`, registrada em todo relatório.
 - Números em E.164; a operadora **não** é deduzida pelo prefixo (portabilidade).
 - Fuso: confirmado / presumido / desconhecido, sinalizado por registro.
 - Duplicidade: mesmo alvo, origem, destino, data/hora UTC, duração, tipo, célula e IP.
-- ERB: CI, ECI e NCI nunca se equiparam; MCC/MNC do registro prevalece sobre a operadora do arquivo; coordenadas
-  nunca são estimadas; ambiguidades são listadas para revisão manual.
+- ERB: CI, ECI e NCI nunca se equiparam; MCC/MNC do registro prevalece; coordenadas nunca são estimadas.
 
-## Servidor
-FastAPI + SQLAlchemy + SQLite (WAL, `secure_delete`). Tabelas: `users` e `password_reset_tokens`. Rotas:
-`/api/auth/*` (login, MFA, senha, sessão), `/api/admin/users*`, `/api/settings`, `/api/health`.
+## Servidor (`frontend/server/app.ts`, executado em `functions/api/[[path]].ts`)
+Tabelas D1: `users`, `reset_tokens`, `login_failures` (IP guardado só como HMAC, por 15 minutos).
+Rotas: `/api/auth/*` (sal, login, MFA, sessão, senha, desbloqueio), `/api/admin/users*`, `/api/setup`,
+`/api/settings`, `/api/health`.

@@ -6,7 +6,7 @@
  * Não usa serviços externos: nenhum dado sai do computador do usuário. Toda resposta
  * separa o que é dado extraído, cálculo, correlação e o que depende de validação humana.
  */
-import { fmtNumber } from '../lib/format'
+import { fmtNumberPlain } from '../lib/format'
 import * as A from './analytics'
 import { EVENT_TYPES, normalizeNumber } from './normalize'
 import { stripAccents } from './text'
@@ -94,7 +94,7 @@ export function parse(question: string, targets: string[]): { filter: A.EventFil
       const idx = ref.charCodeAt(0) - 97
       if (idx >= 0 && idx < targets.length && !nums.includes(targets[idx])) {
         nums.push(targets[idx])
-        notes.push(`'alvo ${ref.toUpperCase()}' interpretado como o ${idx + 1}º alvo cadastrado (${fmtNumber(targets[idx])})`)
+        notes.push(`'alvo ${ref.toUpperCase()}' interpretado como o ${idx + 1}º alvo cadastrado (${fmtNumberPlain(targets[idx])})`)
       }
     }
   }
@@ -104,7 +104,7 @@ export function parse(question: string, targets: string[]): { filter: A.EventFil
       f.numbers = nums
       if (nums.length === 2 && (intent === 'list' || intent === 'summary')) notes.push('eventos envolvendo os números citados')
     }
-    notes.push('números: ' + nums.map((n) => fmtNumber(n)).join(', '))
+    notes.push('números: ' + nums.map((n) => fmtNumberPlain(n)).join(', '))
   }
   if (!notes.length) notes.push('nenhum critério reconhecido: considerando todos os eventos da análise')
   return { filter: f, intent, notes }
@@ -127,7 +127,7 @@ export async function answer(question: string, targets: string[]) {
   } else if (intent === 'contacts') {
     const c = await A.contacts(f, 10)
     for (const r of c.items.slice(0, 5))
-      lines.push({ kind: 'calculo', text: `${fmtNumber(r.other_number)}: ${r.events} eventos em ${r.days} dias com ${fmtNumber(r.target_number)} (${r.outgoing} originados, ${r.incoming} recebidos).` })
+      lines.push({ kind: 'calculo', text: `${fmtNumberPlain(r.other_number)}: ${r.events} eventos em ${r.days} dias com ${fmtNumberPlain(r.target_number)} (${r.outgoing} originados, ${r.incoming} recebidos).` })
     if (!c.items.length) lines.push({ kind: 'indisponivel', text: 'Nenhum interlocutor encontrado com os critérios.' })
     lines.push({ kind: 'limite', text: String(c.criteria.note) })
     out.result = c
@@ -136,7 +136,7 @@ export async function answer(question: string, targets: string[]) {
     const c = await A.commonContacts(nums, { ...f, targets: [] })
     lines.push({ kind: 'calculo', text: `${c.shared.length} contatos em comum entre ${c.numbers.length} números.` })
     for (const r of c.shared.slice(0, 5))
-      lines.push({ kind: 'dado', text: `${fmtNumber(r.contact)}: ` + Object.entries(r.per_number as Record<string, any>).map(([k, v]) => `${fmtNumber(k)} ${v.n}×`).join('; ') })
+      lines.push({ kind: 'dado', text: `${fmtNumberPlain(r.contact)}: ` + Object.entries(r.per_number as Record<string, any>).map(([k, v]) => `${fmtNumberPlain(k)} ${v.n}×`).join('; ') })
     lines.push({ kind: 'limite', text: 'Contato em comum não indica relação entre os titulares.' })
     out.result = c
   } else if (intent === 'coincidence') {

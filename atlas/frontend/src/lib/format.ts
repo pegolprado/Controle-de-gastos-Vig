@@ -14,7 +14,32 @@ export const EVENT_TYPE_LABEL: Record<string, string> = {
 export const VOICE = ['voz_originada', 'voz_recebida', 'voz', 'desvio']
 export const SMS = ['sms_enviado', 'sms_recebido', 'sms']
 
+let masked = false
+/** Liga/desliga a ocultação de números NA TELA (exportações sempre usam o número completo). */
+export function setNumberMask(v: boolean) {
+  masked = v
+}
+
+/** Esconde os dígitos do meio, mantendo DDD e os dois últimos: (61) 9••••-••32. */
+export function maskNumber(formatted: string): string {
+  const total = (formatted.match(/\d/g) ?? []).length
+  if (total <= 4) return formatted
+  const keepHead = Math.min(3, total - 4)
+  let i = 0
+  return formatted.replace(/\d/g, (d) => {
+    i++
+    return i <= keepHead || i > total - 2 ? d : '•'
+  })
+}
+
+/** Número formatado na tela (respeita a opção “ocultar números”). */
 export function fmtNumber(n?: string | null): string {
+  const s = fmtNumberPlain(n)
+  return masked && n ? maskNumber(s) : s
+}
+
+/** Número completo, sem ocultação (usado em exportações e no motor). */
+export function fmtNumberPlain(n?: string | null): string {
   if (!n) return '—'
   if (n.startsWith('+55') && (n.length === 13 || n.length === 14)) {
     const ddd = n.slice(3, 5)

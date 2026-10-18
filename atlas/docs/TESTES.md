@@ -2,24 +2,17 @@
 
 | Camada | Comando | O que cobre |
 |---|---|---|
-| Servidor de login | `cd backend && python -m pytest -q` | só existem as tabelas de usuários; nenhuma rota de dados; limite de corpo; CSRF; bloqueio de conta; `Clear-Site-Data` no logout; escalada de privilégio; ciclo de vida do usuário; MFA; cabeçalhos |
+| Servidor de login | `npx vitest run server` | só existem tabelas de usuários; nenhuma rota de dados; primeiro acesso; sal não revela contas; CSRF; bloqueio de conta; inatividade; `Clear-Site-Data`; escalada de privilégio; ativação por link; MFA (vetor RFC 6238); troca de senha; limite de corpo |
 | Motor no navegador | `cd frontend && npx vitest run` | normalização (números, datas, fusos, durações, tipos, CGI, coordenadas), resolução de ERB (R1–R4, ambiguidade, MCC/MNC, versões), assistente |
-| Ponta a ponta (também validado na pilha Docker com HTTPS) | `cd frontend && npx playwright test` | login → demonstração → todas as telas sem erro → exportação Excel e PDF → **nada no armazenamento do navegador** → sair → novo login sem dados; carga de arquivo pelo assistente |
-| Tipos, lint, build | `npx tsc -b && npx eslint . && npm run build` | |
+| Ponta a ponta (no mesmo ambiente da Cloudflare, via wrangler) | `npx playwright test` | primeiro acesso → login → demonstração → todas as telas sem erro → exportação Excel e PDF → **nada no armazenamento do navegador** → sair → novo login sem dados; carga de arquivo pelo assistente; cadastro e ativação de usuário; ocultar números; bloqueio e desbloqueio de tela |
+| Tipos, lint, build | `npm run typecheck && npx eslint . && npm run build` | inclui a checagem de que nenhum arquivo passa de 25 MiB (CI) |
 
-O teste ponta a ponta precisa da API rodando com o usuário de teste:
-
-```bash
-cd backend
-export DATABASE_URL=sqlite:////tmp/marx-e2e.db SECRET_KEY=chave-de-teste-0123456789-abcdefghijkl MARX_ADMIN_PASSWORD='Teste!Marx2026'
-python -m app.cli create-admin --email admin@marx.local --name "Admin E2E"
-uvicorn app.main:app --port 8000 &
-cd ../frontend && npx playwright test        # sobe o Vite automaticamente
-```
+Todos os comandos rodam na pasta `atlas/frontend`. O teste ponta a ponta compila o site e sobe sozinho o ambiente local da
+Cloudflare (`npm run local`: Pages + Functions + D1 em `http://localhost:8788`).
 
 O CI (`.github/workflows/atlas.yml`) roda todas as camadas a cada alteração.
 
-## Volume (medido em Chromium, build de produção atrás do Caddy)
+## Volume (medido em Chromium, build de produção)
 | Cenário | Resultado |
 |---|---|
 | Arquivo CSV de 200 mil linhas (15 MB): SHA-256 + detecção | 0,2 s |

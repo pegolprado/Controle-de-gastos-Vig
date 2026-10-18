@@ -8,22 +8,8 @@ on:
     paths: ['atlas/**', '.github/workflows/atlas.yml']
 
 jobs:
-  backend:
-    name: Servidor de login (testes)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: atlas/backend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - run: pip install -r requirements.txt
-      - run: python -m pytest -q
-
-  frontend:
-    name: Aplicação (tipos, lint, testes, build e ponta a ponta)
+  marx:
+    name: Tipos, lint, testes, build e ponta a ponta (Cloudflare local)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,26 +21,12 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: atlas/frontend/package-lock.json
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
       - run: npm ci
-      - run: npx tsc -b
+      - run: npm run typecheck
       - run: npx eslint .
       - run: npx vitest run
       - run: npm run build
-      - name: Servidor de login para o teste ponta a ponta
-        working-directory: atlas/backend
-        env:
-          DATABASE_URL: sqlite:////tmp/marx-e2e.db
-          SECRET_KEY: chave-de-teste-somente-para-ci-0123456789
-          MARX_ADMIN_PASSWORD: Teste!Marx2026
-        run: |
-          pip install -r requirements.txt
-          python -m app.cli create-admin --email admin@marx.local --name "Admin E2E"
-          nohup uvicorn app.main:app --port 8000 > /tmp/api.log 2>&1 &
-          sleep 3 && curl -sf localhost:8000/api/health
+      - name: Arquivos dentro do limite do Cloudflare Pages (25 MiB)
+        run: test -z "$(find dist -type f -size +25M)"
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
-      - if: failure()
-        run: cat /tmp/api.log || true

@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './app/auth'
 import { CaseLayout, Shell } from './app/layout'
 import { Loading } from './components/ui'
-import Login, { ForgotPassword, ResetPassword } from './pages/Login'
+import Login, { FirstSetup, ForgotPassword, ResetPassword } from './pages/Login'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Catalog = lazy(() => import('./pages/Catalog'))
@@ -47,6 +47,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/esqueci-senha" element={<ForgotPassword />} />
           <Route path="/redefinir-senha" element={<ResetPassword />} />
+          <Route path="/primeiro-acesso" element={<FirstSetup />} />
           <Route
             element={
               <RequireAuth>

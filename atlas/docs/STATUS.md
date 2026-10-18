@@ -1,7 +1,8 @@
 # Situação
 
 ## Pronto
-- Login individual (Argon2id, MFA opcional, bloqueio, links de ativação/redefinição), administração de usuários.
+- Login individual (senha derivada no navegador, MFA opcional, bloqueio por tentativas, links de ativação/redefinição, primeiro acesso protegido), administração de usuários.
+- Bloqueio de tela (manual e automático) e ocultação de números na tela.
 - Processamento 100% no navegador, sem armazenamento: apagamento ao sair, por inatividade, ao fechar/recarregar.
 - Importação universal com assistente (CSV, TXT delimitado e largura fixa, XLS, XLSX, JSON, XML, HTML, PDF com
   texto e com OCR, ZIP), mapeamentos reaproveitáveis na sessão, prévia e ocorrências por linha.
@@ -9,7 +10,7 @@
   linha do tempo, estatística, cruzamento multifonte, alertas, assistente local.
 - Exportação em Excel, PDF (relatório técnico completo com capa, gráficos, mapa e grafo esquemáticos, limitações e
   rastreabilidade) e CSV, com SHA-256 exibido.
-- Implantação com Docker + Caddy (HTTPS automático, CSP restritiva), backup da lista de usuários, CI.
+- Hospedagem gratuita na Cloudflare (Pages + Functions + D1), HTTPS automático, CSP restritiva, publicação automática a cada alteração no GitHub, CI.
 
 ## Limitações conhecidas
 - O tamanho máximo prático de arquivo depende da memória do computador do usuário (testado com 200 mil linhas em
@@ -19,3 +20,5 @@
 - Layouts das operadoras variam: o assistente sugere o mapeamento, mas o analista deve confirmá-lo. Recomenda-se
   testar com amostras anonimizadas de cada operadora.
 - O mapa de fundo depende de um provedor de tiles externo (ver DEPLOY.md).
+- Sem envio de e-mail: links de ativação e de redefinição são entregues pelo administrador.
+- A `SECRET_KEY` não pode ser trocada depois de criados os usuários (as senhas dependem dela).
