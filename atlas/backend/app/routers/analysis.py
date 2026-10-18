@@ -139,7 +139,7 @@ def export(body: ExportIn, request: Request, access: CaseAccess = Depends(case_e
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     audit.log(db, "eventos.exportados", access.user, case_id=access.case.id, ip=client_ip(request),
               details={"formato": body.fmt, "filtros": body.filter.model_dump(mode="json", exclude_defaults=True)})
-    header = f"# Exportação ATLAS · caso {access.case.code} · {stamp} UTC · por {access.user.email}" + (" · DEMONSTRAÇÃO" if access.case.is_demo else "")
+    header = f"# Exportação iaMARX · caso {access.case.code} · {stamp} UTC · por {access.user.email}" + (" · DEMONSTRAÇÃO" if access.case.is_demo else "")
     if body.fmt == "xlsx":
         from openpyxl import Workbook
 

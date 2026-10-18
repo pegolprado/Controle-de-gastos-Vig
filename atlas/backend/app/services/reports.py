@@ -200,7 +200,7 @@ def render_pdf(data: dict, report: Report) -> bytes:
         canvas.rect(0, h - 14 * mm, w, 14 * mm, stroke=0, fill=1)
         canvas.setFillColor(colors.white)
         canvas.setFont(bold, 9)
-        canvas.drawString(15 * mm, h - 9 * mm, "ATLAS TELECOM INTELLIGENCE")
+        canvas.drawString(15 * mm, h - 9 * mm, "iaMARX · TELECOM INTELLIGENCE")
         canvas.setFont(font, 8)
         canvas.drawRightString(w - 15 * mm, h - 9 * mm, f"Caso {case['code']} · Relatório {report.code}")
         canvas.setFillColor(grey)
@@ -221,7 +221,7 @@ def render_pdf(data: dict, report: Report) -> bytes:
     W = A4[0] - 30 * mm
     story = []
     # ---------------- capa
-    story += [Spacer(1, 45 * mm), P("ATLAS TELECOM INTELLIGENCE", "sub"), Spacer(1, 6 * mm), Paragraph(html.escape(report.title), st["title"]), Spacer(1, 4 * mm)]
+    story += [Spacer(1, 45 * mm), P("iaMARX · TELECOM INTELLIGENCE", "sub"), Spacer(1, 6 * mm), Paragraph(html.escape(report.title), st["title"]), Spacer(1, 4 * mm)]
     story.append(P(f"Caso {case['code']} — {case['title']}", "sub"))
     if case.get("process_number"):
         story.append(P(f"Referência processual: {case['process_number']}", "sub"))

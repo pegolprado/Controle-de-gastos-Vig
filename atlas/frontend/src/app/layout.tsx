@@ -31,7 +31,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <Link to="/" onClick={onNavigate} className="mb-5 flex items-center gap-3 px-2">
         <img src="/favicon.svg" alt="" className="h-9 w-9" />
         <div>
-          <div className="font-mono text-sm font-bold tracking-widest text-white">ATLAS</div>
+          <div className="font-mono text-sm font-bold tracking-wider text-white">iaMARX</div>
           <div className="font-mono text-[10px] tracking-[0.2em] text-faint">TELECOM INTELLIGENCE</div>
         </div>
       </Link>

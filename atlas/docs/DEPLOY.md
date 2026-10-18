@@ -1,6 +1,6 @@
-# Publicar o ATLAS em iamarx.com.br
+# Publicar o iaMARX em iamarx.com.br
 
-O ATLAS precisa de um **servidor** (back-end Python + PostgreSQL + fila de tarefas). Hospedagens de site estático
+O iaMARX precisa de um **servidor** (back-end Python + PostgreSQL + fila de tarefas). Hospedagens de site estático
 (Cloudflare Pages, GitHub Pages, hospedagem compartilhada) **não servem**. O caminho recomendado é um servidor
 virtual (VPS) Linux com Docker. O Caddy, incluído, obtém e renova o certificado HTTPS sozinho.
 

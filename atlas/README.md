@@ -1,4 +1,4 @@
-# ATLAS Telecom Intelligence
+# iaMARX — Telecom Intelligence
 
 Plataforma web para importar, normalizar, correlacionar e analisar bilhetagens telefônicas (CDR) e extratos/cadastros
 de ERB fornecidos por operadoras (TIM, Vivo, Claro e outras), mediante autorização legal — com rastreabilidade de
