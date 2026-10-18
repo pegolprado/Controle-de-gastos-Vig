@@ -21,7 +21,8 @@ import { invalidateFinance } from '@/lib/queryClient';
 import { setFormDirty, trackPending } from '@/lib/formGuard';
 import { cn } from '@/lib/cn';
 import type { Category, PaymentMethod, RecurrenceFreq, Transaction, TxKind, TxStatus } from '@/lib/types';
-import { createInstallments, createTransaction, updateTransaction, uploadReceipt, type TxInput } from '@/services/transactions';
+import { createInstallments, createTransaction, listCategoryHints, updateTransaction, uploadReceipt, type TxInput } from '@/services/transactions';
+import { descriptionKey } from '@/lib/statement';
 import { listInvoices } from '@/services/cards';
 import { createRecurrence, settleOccurrence, updateRecurrence } from '@/services/planning';
 
@@ -154,6 +155,30 @@ export function TransactionForm({ initialKind = 'expense', existing, duplicateOf
     setF((s) => ({ ...s, [k]: v }));
     setErrors((e) => ({ ...e, [k]: undefined }));
   };
+
+  // categoria automática: aprende com os lançamentos anteriores de mesma descrição
+  const [catTouched, setCatTouched] = useState(editing || Boolean(initial.category_id));
+  const [suggestedCat, setSuggestedCat] = useState('');
+  const hints = useQuery({
+    queryKey: wsKey(ws, 'category-hints'),
+    queryFn: () => listCategoryHints(ws),
+    enabled: !editing,
+    staleTime: 10 * 60_000,
+  });
+  useEffect(() => {
+    if (catTouched || (f.kind !== 'income' && f.kind !== 'expense') || !hints.data) return;
+    const typed = descriptionKey(f.description);
+    let found = '';
+    if (typed.length >= 3) {
+      const valid = (id: string | null) => !!id && categories.some((c) => c.id === id && c.kind === f.kind && !c.archived);
+      const same = hints.data.filter((h) => h.kind === f.kind && valid(h.category_id));
+      const exact = same.find((h) => descriptionKey(h.description) === typed);
+      const partial = typed.length >= 4 ? same.find((h) => { const k = descriptionKey(h.description); return k.startsWith(typed) || (k.length >= 4 && typed.startsWith(k)); }) : undefined;
+      found = (exact ?? partial)?.category_id ?? '';
+    }
+    setSuggestedCat(found);
+    setF((s) => (s.category_id === found ? s : { ...s, category_id: found }));
+  }, [f.description, f.kind, hints.data, catTouched, categories]);
 
   // faturas com saldo em aberto (pagamento de fatura)
   const invoicesQuery = useQuery({
@@ -500,9 +525,16 @@ export function TransactionForm({ initialKind = 'expense', existing, duplicateOf
         )}
 
         {(f.kind === 'income' || f.kind === 'expense') && (
-          <Field label="Categoria" optional>
+          <Field label="Categoria" optional hint={!catTouched && suggestedCat && f.category_id === suggestedCat ? 'Sugerida pelo histórico (pode trocar)' : undefined}>
             {(id) => (
-              <Select id={id} value={f.category_id} onChange={(e) => set('category_id', e.target.value)}>
+              <Select
+                id={id}
+                value={f.category_id}
+                onChange={(e) => {
+                  setCatTouched(true);
+                  set('category_id', e.target.value);
+                }}
+              >
                 <option value="">Sem categoria</option>
                 {renderCategoryOptions(groupedCategories)}
               </Select>

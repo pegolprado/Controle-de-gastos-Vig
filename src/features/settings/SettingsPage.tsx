@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Field, Input, Switch } from '@/components/ui/Field';
+import { PushToggle } from '@/pwa/PushToggle';
 import { Segmented } from '@/components/ui/Segmented';
 import { Modal } from '@/components/ui/Modal';
 import { useConfirm } from '@/components/ui/Confirm';
@@ -95,6 +96,8 @@ export default function SettingsPage() {
             <Switch checked={prefs?.hide_values ?? false} onChange={(v) => pref.mutate({ hide_values: v })} label="Ocultar valores ao abrir" description="Valores ficam borrados até você tocar no ícone de olho." />
             <Switch checked={prefs?.budget_alerts ?? true} onChange={(v) => pref.mutate({ budget_alerts: v })} label="Alertas de orçamento" description="Avisos ao atingir 50%, 75%, 90% e 100%." />
             <Switch checked={prefs?.due_alerts ?? true} onChange={(v) => pref.mutate({ due_alerts: v })} label="Alertas de vencimento" description="Contas que vencem em até 3 dias ou estão atrasadas." />
+            <Switch checked={prefs?.renda_alerts ?? true} onChange={(v) => pref.mutate({ renda_alerts: v })} label="Avisos de proventos" description="FII e ações que pagam hoje ou amanhã (Renda FII)." />
+            <PushToggle />
             <Link to="/categorias" className="inline-flex items-center gap-2 text-sm font-semibold text-brand"><Tags className="size-4" /> Gerenciar categorias</Link>
           </div>
         </Card>

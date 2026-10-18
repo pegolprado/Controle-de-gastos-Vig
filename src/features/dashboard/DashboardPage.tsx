@@ -23,6 +23,7 @@ import { nextOccurrences, describeRecurrence } from '@/domain/recurrence';
 import { INVOICE_STATUS_LABEL } from '@/domain/labels';
 import type { Transaction } from '@/lib/types';
 import { reportCategories, reportMonthly, upcomingCommitments } from '@/services/reports';
+import { MonthRecap } from './MonthRecap';
 import { budgetProgress, listRecurrences } from '@/services/planning';
 
 function greeting() {
@@ -199,6 +200,8 @@ export default function DashboardPage() {
           </dl>
         </div>
       </section>
+
+      <MonthRecap />
 
       {/* Indicadores do mês */}
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label={`Resumo de ${monthLabel(month)}`}>

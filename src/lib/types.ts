@@ -37,6 +37,7 @@ export interface Preferences {
   hide_values: boolean;
   budget_alerts: boolean;
   due_alerts: boolean;
+  renda_alerts?: boolean;
 }
 
 export interface SessionContext {
@@ -63,6 +64,8 @@ export interface AppSettings {
   min_client_version: string | null;
   maintenance_message: string | null;
   updated_at: string;
+  /** chave pública dos avisos no celular (gerada pela rotina diária) */
+  vapid_public_key?: string | null;
 }
 
 export interface Account {
@@ -275,10 +278,13 @@ export interface Invite {
   revoked_at: string | null;
 }
 
+export type AssetType = 'fii' | 'stock';
+
 export interface FiiPosition {
   id: string;
   workspace_id: string;
   ticker: string;
+  asset_type: AssetType;
   quantity: number;
   avg_price_cents: number | null;
   created_at: string;
@@ -301,4 +307,48 @@ export interface FiiDistribution {
   approved_on: string | null;
   rate: number;
   related_to: string | null;
+}
+
+export interface FiiTrade {
+  id: string;
+  workspace_id: string;
+  position_id: string;
+  /** null = "já tinha antes" */
+  trade_date: string | null;
+  quantity: number;
+  price_cents: number | null;
+  created_at: string;
+}
+
+export interface StockCompany {
+  code: string;
+  name: string | null;
+  not_found: boolean;
+  synced_at: string;
+}
+
+export interface StockDistribution {
+  code: string;
+  isin: string;
+  kind: string;
+  record_date: string | null;
+  payment_date: string | null;
+  approved_on: string | null;
+  rate: number;
+  related_to: string | null;
+}
+
+export interface AssetQuote {
+  ticker: string;
+  price: number;
+  change_pct: number | null;
+  synced_at: string;
+}
+
+export interface RendaSettings {
+  workspace_id: string;
+  account_id: string | null;
+  auto_launch: boolean;
+  auto_since: string | null;
+  income_goal_cents: number | null;
 }

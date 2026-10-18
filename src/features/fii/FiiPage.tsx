@@ -1,84 +1,115 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Building2, CalendarPlus, ChevronDown, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Building2, Plus, RefreshCw } from 'lucide-react';
 import { useWorkspace, useWsId } from '@/app/WorkspaceProvider';
-import { useLookups, wsKey } from '@/hooks/useFinance';
+import { wsKey } from '@/hooks/useFinance';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Button, IconButton } from '@/components/ui/Button';
-import { Badge, Card, EmptyState, ErrorState, Skeleton } from '@/components/ui/Card';
-import { Field, Input, Select } from '@/components/ui/Field';
-import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
+import { Card, EmptyState, ErrorState, Skeleton } from '@/components/ui/Card';
 import { Money } from '@/components/ui/Money';
-import { MoneyInput } from '@/components/ui/MoneyInput';
 import { Segmented } from '@/components/ui/Segmented';
 import { useConfirm } from '@/components/ui/Confirm';
 import { cn } from '@/lib/cn';
-import { addMonths, capitalize, formatDate, formatDateTime, monthLabel, startOfMonth, todayISO } from '@/lib/dates';
-import { formatBRL, formatPercent } from '@/lib/money';
+import { capitalize, monthLabel } from '@/lib/dates';
+import { formatBRL } from '@/lib/money';
 import { errorMessage } from '@/lib/errors';
-import { stableUUID } from '@/lib/id';
 import { invalidateFinance, queryClient } from '@/lib/queryClient';
-import type { FiiFund, FiiPosition } from '@/lib/types';
-import { baseCode, monthStatus, monthView, normalizeTicker, paymentsFor, payStatus, summarize, yieldOnCost, type FiiPayment, type MonthMode } from '@/domain/fii';
-import { deleteFiiPosition, listFiiMarket, listFiiPositions, saveFiiPosition, syncFii, type FiiSyncResult } from '@/services/fii';
-import { importTransactions, listByRequestIds } from '@/services/transactions';
-
-const fmtRate = (rate: number) => `R$ ${rate.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
-
-/** Chave de idempotência do lançamento de um provento (lançar duas vezes não duplica). */
-const launchId = (ws: string, p: FiiPayment) => stableUUID(`finance-mv-fii|${ws}|${p.ticker}|${p.dist.isin}|${p.dist.kind}|${p.dist.payment_date}`);
-
-/** Data de hoje que se atualiza sozinha na virada do dia (app aberto ou voltando do segundo plano). */
-function useToday() {
-  const [today, setToday] = useState(todayISO);
-  useEffect(() => {
-    const check = () => setToday((t) => (t === todayISO() ? t : todayISO()));
-    const id = window.setInterval(check, 60_000);
-    document.addEventListener('visibilitychange', check);
-    return () => {
-      window.clearInterval(id);
-      document.removeEventListener('visibilitychange', check);
-    };
-  }, []);
-  return today;
-}
+import type { FiiPosition, FiiTrade } from '@/lib/types';
+import { baseCode, monthlyPerShare, monthView, paymentsFor, summarize, undatedFor, type FiiPayment, type MonthMode } from '@/domain/fii';
+import {
+  deleteFiiPosition,
+  deleteTrade,
+  getRendaSettings,
+  listFiiPositions,
+  listFiiTrades,
+  listRendaMarket,
+  runAutopilot,
+  syncAsset,
+  type FiiSyncResult,
+} from '@/services/fii';
+import { listByRequestIds } from '@/services/transactions';
+import { AddAssetDialog, LaunchDialog, TradeDialog } from './dialogs';
+import { PositionCard } from './PositionCard';
+import { launchId, useToday } from './shared';
+import { AgendaTab, GoalTab, IrTab } from './tabs';
 
 const MODE_ORDER: Record<MonthMode, number> = { upcoming: 0, received: 1, next: 2, none: 3 };
+type Tab = 'carteira' | 'agenda' | 'meta' | 'ir';
 
 export default function FiiPage() {
   const ws = useWsId();
   const { canEdit, canContribute } = useWorkspace();
   const confirm = useConfirm();
-  const [tab, setTab] = useState<'carteira' | 'agenda'>('carteira');
-  const [editing, setEditing] = useState<FiiPosition | 'new' | null>(null);
+  const [tab, setTab] = useState<Tab>('carteira');
+  const [adding, setAdding] = useState(false);
+  const [trading, setTrading] = useState<FiiPosition | null>(null);
   const [launching, setLaunching] = useState<FiiPayment[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const today = useToday();
 
   const positions = useQuery({ queryKey: wsKey(ws, 'fii-positions'), queryFn: () => listFiiPositions(ws) });
-  const codes = useMemo(() => [...new Set((positions.data ?? []).map((p) => baseCode(p.ticker)))].sort(), [positions.data]);
+  const trades = useQuery({ queryKey: wsKey(ws, 'fii-trades'), queryFn: () => listFiiTrades(ws) });
+  const settings = useQuery({ queryKey: wsKey(ws, 'renda-settings'), queryFn: () => getRendaSettings(ws) });
+  const assets = useMemo(() => (positions.data ?? []).map((p) => ({ ticker: p.ticker, asset_type: p.asset_type ?? 'fii' })), [positions.data]);
   const market = useQuery({
-    queryKey: ['fii-market', codes.join(',')],
+    queryKey: ['renda-market', assets.map((a) => `${a.ticker}:${a.asset_type}`).join(',')],
     enabled: positions.isSuccess,
     staleTime: 15 * 60_000,
     queryFn: async () => {
-      const results = await Promise.allSettled(codes.map((c) => syncFii(c)));
-      const status = new Map<string, FiiSyncResult>(codes.map((c, i) => [c, results[i]!.status === 'fulfilled' ? (results[i] as PromiseFulfilledResult<FiiSyncResult>).value : 'unavailable']));
-      return { ...(await listFiiMarket(codes)), status };
+      const results = await Promise.allSettled(assets.map((a) => syncAsset(a.ticker, a.asset_type)));
+      const status = new Map<string, FiiSyncResult>(
+        assets.map((a, i) => [a.ticker, results[i]!.status === 'fulfilled' ? (results[i] as PromiseFulfilledResult<FiiSyncResult>).value : 'unavailable']),
+      );
+      return { ...(await listRendaMarket(assets)), status };
     },
   });
 
-  const today = useToday();
-  const fundMap = useMemo(() => new Map<string, FiiFund>((market.data?.funds ?? []).map((f) => [f.code, f])), [market.data]);
-  // cartões ordenados pelo próximo pagamento (anunciado ou previsto): o que cai antes aparece primeiro
+  // piloto automático: depois de atualizar os anúncios, lança/recebe o que for devido
+  const autopilotRan = useRef('');
+  useEffect(() => {
+    if (!market.isSuccess || !settings.data?.auto_launch || !canContribute) return;
+    const key = `${ws}|${market.dataUpdatedAt}`;
+    if (autopilotRan.current === key) return;
+    autopilotRan.current = key;
+    void runAutopilot(ws)
+      .then((n) => {
+        if (n) {
+          void invalidateFinance(ws);
+          void queryClient.invalidateQueries({ queryKey: wsKey(ws, 'fii-launched') });
+        }
+      })
+      .catch(() => {});
+  }, [market.isSuccess, market.dataUpdatedAt, settings.data?.auto_launch, canContribute, ws]);
+
+  const tradesByPos = useMemo(() => {
+    const m = new Map<string, FiiTrade[]>();
+    for (const t of trades.data ?? []) m.set(t.position_id, [...(m.get(t.position_id) ?? []), t]);
+    return m;
+  }, [trades.data]);
+  const nameOf = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const f of market.data?.funds ?? []) m.set(`fii:${f.code}`, f.name);
+    for (const c of market.data?.companies ?? []) m.set(`stock:${c.code}`, c.name);
+    return m;
+  }, [market.data]);
+  const quoteOf = useMemo(() => new Map((market.data?.quotes ?? []).map((q) => [q.ticker, q])), [market.data]);
+  const syncedOf = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of market.data?.funds ?? []) m.set(`fii:${f.code}`, f.synced_at);
+    for (const c of market.data?.companies ?? []) m.set(`stock:${c.code}`, c.synced_at);
+    return m;
+  }, [market.data]);
+
+  // cartões: a cair neste mês (mais perto primeiro) → recebidos no mês → próximo mês → sem anúncio
   const byPosition = useMemo(
     () =>
       (positions.data ?? [])
         .map((p) => {
-          const payments = paymentsFor(p, market.data?.dists ?? []);
-          return { position: p, payments, ...monthView(payments, today) };
+          const t = tradesByPos.get(p.id) ?? [];
+          const payments = paymentsFor(p, market.data?.dists ?? [], t);
+          return { position: p, trades: t, payments, undated: undatedFor(p, market.data?.dists ?? [], t), ...monthView(payments, today) };
         })
-        // a cair neste mês (mais perto primeiro) → recebidos no mês → próximo mês → sem anúncio
         .sort((a, b) => {
           const byMode = MODE_ORDER[a.mode] - MODE_ORDER[b.mode];
           if (byMode) return byMode;
@@ -86,22 +117,43 @@ export default function FiiPage() {
           const db = b.featured?.dist.payment_date ?? '9999';
           return (a.mode === 'received' ? db.localeCompare(da) : da.localeCompare(db)) || a.position.ticker.localeCompare(b.position.ticker);
         }),
-    [positions.data, market.data, today],
+    [positions.data, tradesByPos, market.data, today],
   );
   const summary = useMemo(
     () => summarize(byPosition.flatMap((x) => x.payments), today, byPosition.flatMap((x) => (x.featured?.projected ? [x.featured] : []))),
     [byPosition, today],
   );
-  // a cair neste mês e, depois, os do mês seguinte (sem contagem até a virada)
   const thisMonth = byPosition.filter((x) => x.mode === 'upcoming').map((x) => x.featured!);
   const nextMonth = byPosition.filter((x) => x.mode === 'next').map((x) => x.featured!).sort((a, b) => a.dist.payment_date.localeCompare(b.dist.payment_date));
   const thisMonthCents = thisMonth.reduce((s, p) => s + p.amount_cents, 0);
   const thisMonthProjected = thisMonth.filter((p) => p.projected).reduce((s, p) => s + p.amount_cents, 0);
-  const agenda = [...thisMonth, ...nextMonth];
+  const portfolioCents = byPosition.reduce((s, x) => s + Math.round((quoteOf.get(x.position.ticker)?.price ?? 0) * x.position.quantity * 100), 0);
+
+  const goalItems = useMemo(
+    () =>
+      byPosition.map((x) => ({
+        ticker: x.position.ticker,
+        type: x.position.asset_type ?? 'fii',
+        quantity: x.position.quantity,
+        perShare: monthlyPerShare(x.position.asset_type ?? 'fii', x.payments, today),
+        price: quoteOf.get(x.position.ticker)?.price ?? null,
+      })),
+    [byPosition, quoteOf, today],
+  );
+  const irItems = useMemo(
+    () =>
+      byPosition.map((x) => ({
+        ticker: x.position.ticker,
+        assetType: x.position.asset_type ?? 'fii',
+        name: nameOf.get(`${x.position.asset_type ?? 'fii'}:${baseCode(x.position.ticker)}`) ?? null,
+        payments: x.payments,
+      })),
+    [byPosition, nameOf],
+  );
 
   // proventos futuros já lançados como receita
   const upcomingIds = useQuery({
-    queryKey: wsKey(ws, 'fii-launched', summary.upcoming.map((p) => `${p.ticker}${p.dist.payment_date}`).join(',')),
+    queryKey: wsKey(ws, 'fii-launched', summary.upcoming.map((p) => `${p.ticker}${p.dist.payment_date}${p.dist.kind}`).join(',')),
     enabled: summary.upcoming.length > 0,
     queryFn: async () => {
       const ids = await Promise.all(summary.upcoming.map((p) => launchId(ws, p)));
@@ -111,64 +163,66 @@ export default function FiiPage() {
   });
   const isLaunched = (p: FiiPayment) => upcomingIds.data?.has(`${p.ticker}|${p.dist.payment_date}|${p.dist.kind}`) ?? false;
 
-  const del = useMutation({
-    mutationFn: deleteFiiPosition,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: wsKey(ws, 'fii-positions') }),
-    onError: (e) => toast.error(errorMessage(e)),
-  });
+  const refreshRenda = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: wsKey(ws, 'fii-positions') }),
+      queryClient.invalidateQueries({ queryKey: wsKey(ws, 'fii-trades') }),
+    ]);
+  const del = useMutation({ mutationFn: deleteFiiPosition, onSuccess: () => void refreshRenda(), onError: (e) => toast.error(errorMessage(e)) });
+  const delTrade = useMutation({ mutationFn: deleteTrade, onSuccess: () => void refreshRenda(), onError: (e) => toast.error(errorMessage(e)) });
 
   async function refresh() {
     setRefreshing(true);
     try {
-      const r = await Promise.allSettled(codes.map((c) => syncFii(c, true)));
-      if (r.some((x) => x.status === 'fulfilled' && x.value === 'unavailable')) toast.warning('A B3 não respondeu para alguns fundos. Tente de novo em alguns minutos.');
-      await queryClient.invalidateQueries({ queryKey: ['fii-market'] });
+      const r = await Promise.allSettled(assets.map((a) => syncAsset(a.ticker, a.asset_type, true)));
+      if (r.some((x) => x.status === 'fulfilled' && x.value === 'unavailable')) toast.warning('A B3 não respondeu para alguns ativos. Tente de novo em alguns minutos.');
+      await queryClient.invalidateQueries({ queryKey: ['renda-market'] });
     } finally {
       setRefreshing(false);
     }
   }
 
-  const loading = positions.isLoading || (positions.isSuccess && codes.length > 0 && market.isLoading);
-  const list = byPosition;
+  const loading = positions.isLoading || (positions.isSuccess && assets.length > 0 && (market.isLoading || trades.isLoading));
+  const missingDb = [positions.error, settings.error].some((e) => ['PGRST205', 'PGRST202', '42P01', '42703'].includes((e as { code?: string } | null)?.code ?? ''));
 
   return (
     <>
       <PageHeader
         title="Renda FII"
-        subtitle="Quanto e quando seus fundos imobiliários vão pagar, com os anúncios oficiais da B3."
+        subtitle="Quanto e quando seus fundos imobiliários e ações vão pagar, com os anúncios oficiais da B3."
         actions={
           <>
-            {codes.length > 0 && (
+            {assets.length > 0 && (
               <Button size="sm" icon={<RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />} onClick={() => void refresh()} disabled={refreshing}>
                 Atualizar
               </Button>
             )}
             {canEdit && (
-              <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={() => setEditing('new')}>
-                Adicionar fundo
+              <Button size="sm" variant="primary" icon={<Plus className="size-4" />} onClick={() => setAdding(true)}>
+                Adicionar
               </Button>
             )}
           </>
         }
       />
 
-      {positions.error && ['PGRST205', 'PGRST202', '42P01'].includes((positions.error as { code?: string }).code ?? '') ? (
+      {missingDb ? (
         <Card>
           <EmptyState
             icon={<Building2 className="size-6" />}
             title="Falta atualizar o banco de dados"
-            description="A Renda FII precisa de uma atualização no Supabase: no SQL Editor, rode o arquivo supabase/migrations/20261017001000_renda_fii.sql (uma única vez)."
+            description="Esta tela precisa da atualização mais recente do banco no Supabase. Ela é aplicada automaticamente em alguns minutos depois de publicada; se continuar aparecendo, avise o administrador."
           />
         </Card>
       ) : positions.error ? (
         <ErrorState error={positions.error} onRetry={() => void positions.refetch()} />
-      ) : positions.isSuccess && list.length === 0 ? (
+      ) : positions.isSuccess && byPosition.length === 0 ? (
         <Card>
           <EmptyState
             icon={<Building2 className="size-6" />}
-            title="Nenhum fundo na carteira"
-            description="Informe o código (ex.: HGLG11) e quantas cotas você tem. O app mostra quanto e quando cada fundo vai pagar."
-            action={canEdit && <Button variant="primary" onClick={() => setEditing('new')}>Adicionar fundo</Button>}
+            title="Nenhum ativo na carteira"
+            description="Informe o código (ex.: HGLG11 ou PETR4), quantas cotas ou ações você tem e quando comprou. O app mostra quanto e quando cada um vai pagar."
+            action={canEdit && <Button variant="primary" onClick={() => setAdding(true)}>Adicionar à carteira</Button>}
           />
         </Card>
       ) : (
@@ -179,114 +233,95 @@ export default function FiiPage() {
               cents={thisMonthCents}
               tone="warning"
               loading={loading}
-              footer={`${thisMonth.length} ${thisMonth.length === 1 ? 'fundo' : 'fundos'}${thisMonthProjected ? ` · ${formatBRL(thisMonthProjected)} previsto` : ''}`}
+              footer={`${thisMonth.length} ${thisMonth.length === 1 ? 'ativo' : 'ativos'}${thisMonthProjected ? ` · ${formatBRL(thisMonthProjected)} previsto` : ''}`}
             />
             <Stat label="Recebido este mês" cents={summary.this_month_cents} tone="positive" loading={loading} />
-            <Stat label="Últimos 12 meses" cents={summary.last12_cents} tone="positive" loading={loading} />
-            <Stat label="Média mensal" cents={summary.monthly_avg_cents} tone="neutral" loading={loading} footer="nos meses com pagamento" />
+            <Stat label="Últimos 12 meses" cents={summary.last12_cents} tone="positive" loading={loading} footer={`média ${formatBRL(summary.monthly_avg_cents)}/mês`} />
+            <Stat label="Valor da carteira" cents={portfolioCents} tone="neutral" loading={loading} footer="pela última cotação" />
           </section>
 
           <Segmented
-            className="mt-5 max-w-xs"
+            className="mt-5 max-w-md"
             label="Visualização"
             value={tab}
             onChange={setTab}
             options={[
               { value: 'carteira', label: 'Carteira' },
-              { value: 'agenda', label: 'Próximos pagamentos' },
+              { value: 'agenda', label: 'Agenda' },
+              { value: 'meta', label: 'Meta' },
+              { value: 'ir', label: 'IR' },
             ]}
           />
 
           {market.error && <div className="mt-4"><ErrorState error={market.error} onRetry={() => void market.refetch()} /></div>}
 
-          {tab === 'carteira' ? (
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              {loading
-                ? [0, 1].map((i) => <Skeleton key={i} className="h-40" />)
-                : list.map(({ position, payments, mode, featured, last }) => (
-                    <PositionCard
-                      key={position.id}
-                      position={position}
-                      fund={fundMap.get(baseCode(position.ticker))}
-                      status={market.data?.status.get(baseCode(position.ticker))}
-                      payments={payments}
-                      mode={mode}
-                      featured={featured}
-                      last={last}
-                      today={today}
-                      launched={isLaunched}
-                      canEdit={canEdit}
-                      canLaunch={canContribute}
-                      onEdit={() => setEditing(position)}
-                      onLaunch={(p) => setLaunching([p])}
-                      onDelete={async () => {
-                        if (await confirm({ title: `Remover ${position.ticker} da carteira?`, description: 'Os lançamentos já feitos continuam no extrato.', confirmLabel: 'Remover' })) del.mutate(position.id);
-                      }}
-                    />
-                  ))}
-            </div>
-          ) : (
-            <Card className="mt-4">
-              {loading ? (
-                <Skeleton className="m-5 h-24" />
-              ) : agenda.length === 0 ? (
-                <EmptyState title="Nenhum pagamento previsto" description="Os fundos costumam anunciar os rendimentos no fim de cada mês. Volte depois ou toque em Atualizar." />
-              ) : (
-                <>
-                  <ul className="divide-y divide-line">
-                    {agenda.map((p) => {
-                      const st = monthStatus(p.dist.payment_date < startOfMonth(addMonths(today, 1)) ? 'upcoming' : 'next', p, today)!;
-                      return (
-                        <li key={`${p.ticker}${p.dist.payment_date}${p.dist.kind}${p.dist.isin}`} className="flex items-center gap-3 px-5 py-3.5">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold">{p.ticker} <span className="text-[13px] font-normal text-subtle">· {p.quantity} cotas × {fmtRate(p.dist.rate)}</span></p>
-                            <p className="text-[13px] text-subtle">
-                              {p.projected ? 'Previsto para' : 'Pagamento'} {formatDate(p.dist.payment_date)}
-                              {p.dist.record_date && ` · data com ${p.projected ? '~' : ''}${formatDate(p.dist.record_date)}`}
-                              {p.projected && ' · ainda não anunciado'}
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                            <Money cents={p.amount_cents} className={cn('font-num font-semibold', p.projected ? 'text-info' : 'text-warning')} />
-                            <Badge tone={st.tone}>{st.label}</Badge>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {canContribute && summary.upcoming.length > 0 && (
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4">
-                      <p className="text-[13px] text-muted">Lance como receitas a receber para aparecerem na Agenda e no saldo previsto.</p>
-                      <Button
-                        size="sm"
-                        variant="subtle"
-                        icon={<CalendarPlus className="size-4" />}
-                        disabled={summary.upcoming.every(isLaunched)}
-                        onClick={() => setLaunching(summary.upcoming.filter((p) => !isLaunched(p)))}
-                      >
-                        {summary.upcoming.every(isLaunched) ? 'Tudo lançado' : 'Lançar como receitas'}
-                      </Button>
-                    </div>
-                  )}
-                </>
+          {tab === 'carteira' && (
+            <>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                {loading
+                  ? [0, 1].map((i) => <Skeleton key={i} className="h-40" />)
+                  : byPosition.map((x) => (
+                      <PositionCard
+                        key={x.position.id}
+                        position={x.position}
+                        name={nameOf.get(`${x.position.asset_type ?? 'fii'}:${baseCode(x.position.ticker)}`)}
+                        syncedAt={syncedOf.get(`${x.position.asset_type ?? 'fii'}:${baseCode(x.position.ticker)}`)}
+                        status={market.data?.status.get(x.position.ticker)}
+                        quote={quoteOf.get(x.position.ticker)}
+                        trades={x.trades}
+                        payments={x.payments}
+                        undated={x.undated}
+                        mode={x.mode}
+                        featured={x.featured}
+                        last={x.last}
+                        today={today}
+                        launched={isLaunched}
+                        canEdit={canEdit}
+                        canLaunch={canContribute && !settings.data?.auto_launch}
+                        onTrade={() => setTrading(x.position)}
+                        onLaunch={(p) => setLaunching([p])}
+                        onDeleteTrade={async (t) => {
+                          if (await confirm({ title: 'Excluir esta operação?', description: 'A quantidade e o preço médio serão recalculados.', confirmLabel: 'Excluir' })) delTrade.mutate(t.id);
+                        }}
+                        onDelete={async () => {
+                          if (await confirm({ title: `Remover ${x.position.ticker} da carteira?`, description: 'As compras registradas são apagadas; os lançamentos já feitos continuam no extrato.', confirmLabel: 'Remover' })) del.mutate(x.position.id);
+                        }}
+                      />
+                    ))}
+              </div>
+              {!loading && summary.last12_cents > 0 && (
+                <Card className="mt-4 p-5">
+                  <h2 className="text-[15px] font-semibold">Proventos por mês</h2>
+                  <MonthBars months={summary.months} />
+                </Card>
               )}
-            </Card>
+            </>
           )}
 
-          {!loading && summary.last12_cents > 0 && (
-            <Card className="mt-4 p-5">
-              <h2 className="text-[15px] font-semibold">Rendimentos por mês</h2>
-              <MonthBars months={summary.months} />
-            </Card>
+          {tab === 'agenda' && (
+            <AgendaTab
+              agenda={[...thisMonth, ...nextMonth]}
+              upcoming={summary.upcoming}
+              today={today}
+              loading={loading}
+              settings={settings.data ?? null}
+              canEdit={canEdit}
+              canContribute={canContribute}
+              isLaunched={isLaunched}
+              onLaunch={setLaunching}
+            />
           )}
+          {tab === 'meta' && <GoalTab key={settings.data?.income_goal_cents ?? 0} settings={settings.data ?? null} canEdit={canEdit} items={goalItems} loading={loading} />}
+          {tab === 'ir' && <IrTab items={irItems} today={today} />}
 
           <p className="mt-5 text-[12px] leading-relaxed text-subtle">
-            Cada fundo mostra o pagamento do mês vigente: já pago = <strong>Recebido</strong> (no próprio dia do pagamento); ainda a cair = contagem de dias. Na virada do mês, todos voltam a contar os dias até o próximo. Fonte: B3 (consulta pública de fundos listados), atualizada a cada 6 horas. <strong>Previsto</strong> = o fundo ainda não anunciou; data e valor estimados pelo histórico (dia em que costuma pagar e último valor por cota), substituídos pelo anúncio oficial assim que sair. Os valores usam a quantidade de cotas cadastrada hoje: você recebe se tinha as cotas no fim do pregão da <strong>data com</strong>. Não é recomendação de investimento.
+            Cada ativo mostra o pagamento do mês vigente: já pago = <strong>Recebido</strong> (no próprio dia do pagamento); ainda a cair = contagem de dias. Na virada do mês, todos voltam a contar os dias até o próximo. <strong>Previsto</strong> = o fundo ainda não anunciou; data e valor estimados pelo histórico, substituídos pelo anúncio oficial assim que sair. Você recebe pelas cotas ou ações que tinha na <strong>data com</strong> (pelas datas das suas compras). JCP aparece líquido de 15% de IR. Fonte: B3 (consultas públicas), atualizada a cada 6 horas; cotações a cada 20 minutos. Não é recomendação de investimento.
           </p>
         </>
       )}
 
-      {editing && <PositionDialog position={editing === 'new' ? null : editing} existing={positions.data ?? []} onClose={() => setEditing(null)} />}
+      {adding && <AddAssetDialog existing={positions.data ?? []} onClose={() => setAdding(false)} />}
+      {trading && <TradeDialog position={trading} onClose={() => setTrading(null)} />}
       {launching && <LaunchDialog payments={launching} onClose={() => setLaunching(null)} />}
     </>
   );
@@ -321,312 +356,5 @@ function MonthBars({ months }: { months: Array<{ month: string; cents: number }>
         </div>
       ))}
     </div>
-  );
-}
-
-function PositionCard({
-  position,
-  fund,
-  status,
-  payments,
-  mode,
-  featured,
-  last,
-  today,
-  launched,
-  canEdit,
-  canLaunch,
-  onEdit,
-  onDelete,
-  onLaunch,
-}: {
-  position: FiiPosition;
-  fund?: FiiFund;
-  status?: FiiSyncResult;
-  payments: FiiPayment[];
-  mode: MonthMode;
-  featured?: FiiPayment;
-  last?: FiiPayment;
-  today: string;
-  launched: (p: FiiPayment) => boolean;
-  canEdit: boolean;
-  canLaunch: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-  onLaunch: (p: FiiPayment) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const projected = !!featured?.projected;
-  const st = monthStatus(mode, featured, today);
-  const yoc = featured ? yieldOnCost(featured.dist.rate, position.avg_price_cents) : null;
-
-  return (
-    <Card className="overflow-hidden">
-      <div className="flex items-start gap-4 p-5">
-        <div className="min-w-0 flex-1">
-          <p className="font-display text-2xl font-bold tracking-tight">{position.ticker}</p>
-          <p className="truncate text-[13px] text-subtle">{fund?.name ?? 'Fundo imobiliário'} · {position.quantity} {position.quantity === 1 ? 'cota' : 'cotas'}</p>
-          {featured && (
-            <p className="mt-2 text-[15px] text-muted">
-              {projected ? 'Previsto' : 'Rendimento'}: {fmtRate(featured.dist.rate)} <span className="text-[13px] text-subtle">por cota</span>
-            </p>
-          )}
-          {featured && (
-            <p className="text-[13px] text-subtle">
-              {mode === 'received' || mode === 'none' ? 'Caiu em' : projected ? 'Deve cair em' : 'Cai em'}{' '}
-              <strong className="font-semibold text-fg">{formatDate(featured.dist.payment_date)}</strong>
-              {mode !== 'received' && mode !== 'none' && last && <> · último: <Money cents={last.amount_cents} /> em {formatDate(last.dist.payment_date)}</>}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          {featured && st ? (
-            <>
-              {projected && <span className="-mb-2 text-[11px] font-semibold uppercase tracking-wide text-info">previsto</span>}
-              <Money cents={featured.amount_cents} className={cn('font-num text-2xl font-bold', mode === 'received' ? 'text-positive' : mode === 'next' || mode === 'none' ? 'text-muted' : projected ? 'text-info' : 'text-warning')} />
-              <Badge tone={st.tone} className="px-3 py-1 text-[13px] uppercase tracking-wide">{capitalize(st.label.replace('Previsto · ', ''))}</Badge>
-            </>
-          ) : (
-            <Badge tone="neutral">{status === 'not_found' ? 'Não encontrado na B3' : status === 'unavailable' ? 'B3 indisponível' : 'Sem anúncios'}</Badge>
-          )}
-        </div>
-      </div>
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-center gap-1.5 border-t border-line bg-surface-2/50 py-3 text-sm font-semibold text-muted transition hover:text-fg"
-      >
-        Mais detalhes <ChevronDown className={cn('size-4 transition', open && 'rotate-180')} aria-hidden />
-      </button>
-      {open && (
-        <div className="border-t border-line p-5 text-[14px]">
-          {featured && (
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
-              <dt className="text-subtle">{projected ? 'Data com (prevista)' : 'Data com'}</dt>
-              <dd className="text-right font-medium">{featured.dist.record_date ? formatDate(featured.dist.record_date) : '—'}</dd>
-              <dt className="text-subtle">{projected ? 'Pagamento (previsto)' : 'Pagamento'}</dt>
-              <dd className="text-right font-medium">{formatDate(featured.dist.payment_date)}</dd>
-              {featured.dist.related_to && (
-                <>
-                  <dt className="text-subtle">Referência</dt>
-                  <dd className="text-right font-medium">{capitalize(featured.dist.related_to.split('/').slice(0, 2).join('/').toLowerCase())}</dd>
-                </>
-              )}
-              <dt className="text-subtle">Tipo</dt>
-              <dd className="text-right font-medium">{capitalize(featured.dist.kind.toLowerCase())}</dd>
-              {yoc !== null && (
-                <>
-                  <dt className="text-subtle">Sobre o preço médio</dt>
-                  <dd className="text-right font-medium">{formatPercent(yoc, 2)} ao mês</dd>
-                </>
-              )}
-            </dl>
-          )}
-          {payments.length > 0 && (
-            <>
-              <h3 className="mt-5 text-[13px] font-semibold uppercase tracking-wide text-subtle">Histórico</h3>
-              <ul className="mt-2 divide-y divide-line">
-                {payments.slice(0, 13).map((p) => (
-                  <li key={`${p.dist.payment_date}${p.dist.kind}${p.dist.isin}`} className="flex items-center justify-between gap-3 py-2">
-                    <span>
-                      {formatDate(p.dist.payment_date)} <span className="text-[13px] text-subtle">· {fmtRate(p.dist.rate)}</span>
-                    </span>
-                    <Money cents={p.amount_cents} className="font-num font-medium" />
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-          {fund?.synced_at && <p className="mt-3 text-[12px] text-subtle">Atualizado em {formatDateTime(fund.synced_at)}</p>}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {canLaunch && featured && !projected && !payStatus(featured.dist.payment_date, today).paid && (
-              <Button size="sm" variant="subtle" icon={<CalendarPlus className="size-4" />} disabled={launched(featured)} onClick={() => onLaunch(featured)}>
-                {launched(featured) ? 'Lançado como receita' : 'Lançar como receita'}
-              </Button>
-            )}
-            <div className="flex-1" />
-            {canEdit && (
-              <IconButton size="sm" label={`Editar ${position.ticker}`} onClick={onEdit}>
-                <Pencil className="size-4" />
-              </IconButton>
-            )}
-            {canEdit && (
-              <IconButton size="sm" label={`Remover ${position.ticker}`} onClick={onDelete}>
-                <Trash2 className="size-4" />
-              </IconButton>
-            )}
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function PositionDialog({ position, existing, onClose }: { position: FiiPosition | null; existing: FiiPosition[]; onClose: () => void }) {
-  const ws = useWsId();
-  const [ticker, setTicker] = useState(position?.ticker ?? '');
-  const [quantity, setQuantity] = useState(position ? String(position.quantity) : '');
-  const [avg, setAvg] = useState(position?.avg_price_cents ?? 0);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  async function save() {
-    setError(null);
-    const t = position?.ticker ?? normalizeTicker(ticker);
-    const q = Number(quantity.replace(/\D/g, ''));
-    if (!t) return setError('Código inválido. Use o formato da B3, por exemplo HGLG11.');
-    if (!q || q < 1) return setError('Informe quantas cotas você tem.');
-    if (!position && existing.some((p) => p.ticker === t)) return setError(`${t} já está na carteira. Edite a quantidade dele.`);
-    setSaving(true);
-    try {
-      if (!position) {
-        const r = await syncFii(t);
-        if (r === 'not_found') {
-          setSaving(false);
-          return setError(`Não encontramos ${t} entre os fundos listados na B3. Confira o código.`);
-        }
-        if (r === 'unavailable') toast.warning('A B3 não respondeu agora; os rendimentos aparecem na próxima atualização.');
-      }
-      await saveFiiPosition(ws, { id: position?.id, ticker: t, quantity: q, avg_price_cents: avg || null });
-      await queryClient.invalidateQueries({ queryKey: wsKey(ws, 'fii-positions') });
-      toast.success(position ? `${t} atualizado.` : `${t} adicionado à carteira.`);
-      onClose();
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      locked={saving}
-      size="sm"
-      title={position ? `Editar ${position.ticker}` : 'Adicionar fundo'}
-      footer={
-        <div className="flex w-full justify-end gap-2">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancelar</Button>
-          <Button variant="primary" onClick={() => void save()} loading={saving}>Salvar</Button>
-        </div>
-      }
-    >
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void save();
-        }}
-      >
-        <Field label="Código do fundo" hint={position ? undefined : 'Ex.: HGLG11, MXRF11, KNRI11'}>
-          {(id, d) => (
-            <Input id={id} aria-describedby={d} value={ticker} disabled={!!position} autoCapitalize="characters" autoComplete="off" maxLength={6} placeholder="HGLG11" onChange={(e) => setTicker(e.target.value.toUpperCase())} data-autofocus />
-          )}
-        </Field>
-        <Field label="Quantidade de cotas">
-          {(id) => <Input id={id} inputMode="numeric" value={quantity} placeholder="100" onChange={(e) => setQuantity(e.target.value.replace(/\D/g, '').slice(0, 9))} />}
-        </Field>
-        <Field label="Preço médio por cota" optional hint="Para ver o rendimento sobre o que você pagou.">
-          {(id, d) => <MoneyInput id={id} aria-describedby={d} value={avg} onChange={setAvg} />}
-        </Field>
-        {error && (
-          <p role="alert" className="rounded-xl border border-negative/25 bg-negative/8 px-3 py-2 text-sm text-negative">
-            {error}
-          </p>
-        )}
-        <button type="submit" className="hidden" />
-      </form>
-    </Modal>
-  );
-}
-
-function LaunchDialog({ payments, onClose }: { payments: FiiPayment[]; onClose: () => void }) {
-  const ws = useWsId();
-  const { accounts, categories } = useLookups();
-  const active = accounts.filter((a) => !a.archived);
-  const [picked, setPicked] = useState('');
-  const accountId = picked || active[0]?.id || '';
-  const [saving, setSaving] = useState(false);
-  const category =
-    categories.find((c) => c.kind === 'income' && !c.archived && /dividendo|rendimento/i.test(c.name)) ??
-    categories.find((c) => c.kind === 'income' && !c.archived && /invest/i.test(c.name));
-  const total = payments.reduce((s, p) => s + p.amount_cents, 0);
-
-  async function launch() {
-    if (!accountId) return;
-    setSaving(true);
-    try {
-      const items = await Promise.all(
-        payments.map(async (p) => ({
-          kind: 'income' as const,
-          status: 'pending' as const,
-          description: `Rendimento ${p.ticker}`,
-          amount_cents: p.amount_cents,
-          occurred_on: p.dist.payment_date,
-          due_on: p.dist.payment_date,
-          category_id: category?.id ?? null,
-          account_id: accountId,
-          destination_account_id: null,
-          card_id: null,
-          payment_method: null,
-          tags: ['fii'],
-          notes: `${p.quantity} cotas × ${fmtRate(p.dist.rate)}${p.dist.record_date ? ` · data com ${formatDate(p.dist.record_date)}` : ''}`,
-          client_request_id: await launchId(ws, p),
-        })),
-      );
-      const created = await importTransactions(ws, items.filter((i) => i.amount_cents > 0));
-      void invalidateFinance(ws);
-      toast.success(created ? `${created} ${created === 1 ? 'receita lançada' : 'receitas lançadas'} em Compromissos → A receber.` : 'Esses rendimentos já estavam lançados.');
-      onClose();
-    } catch (e) {
-      toast.error(errorMessage(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      locked={saving}
-      size="sm"
-      title="Lançar como receita"
-      description="Os rendimentos entram como receitas a receber na data de pagamento. Quando caírem na conta, marque como recebidos."
-      footer={
-        <div className="flex w-full justify-end gap-2">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancelar</Button>
-          <Button variant="primary" onClick={() => void launch()} loading={saving} disabled={!accountId}>
-            Lançar <Money cents={total} className="ml-1" />
-          </Button>
-        </div>
-      }
-    >
-      {active.length === 0 ? (
-        <p className="text-[15px] text-muted">Cadastre primeiro a conta da corretora em <strong className="text-fg">Contas</strong>.</p>
-      ) : (
-        <div className="flex flex-col gap-4">
-          <Field label="Conta que recebe (corretora)">
-            {(id) => (
-              <Select id={id} value={accountId} onChange={(e) => setPicked(e.target.value)}>
-                {active.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </Select>
-            )}
-          </Field>
-          <ul className="divide-y divide-line text-[14px]">
-            {payments.map((p) => (
-              <li key={`${p.ticker}${p.dist.payment_date}${p.dist.kind}`} className="flex justify-between gap-3 py-2">
-                <span>{p.ticker} · {formatDate(p.dist.payment_date)}</span>
-                <Money cents={p.amount_cents} className="font-num font-medium" />
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </Modal>
   );
 }

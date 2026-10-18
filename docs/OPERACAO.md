@@ -108,3 +108,21 @@ O procedimento abaixo é exercitado automaticamente em `npm run test:db`: gera d
 - *Administração → Erros*: mensagens técnicas sanitizadas no navegador, sem tokens, e-mails ou números.
 - Supabase → **Reports/Logs**: API, Auth e banco.
 - Limites do plano grátis: 500 MB de banco, 1 GB de Storage, 50 mil usuários ativos por mês, 5 GB de banda de saída. O tamanho atual aparece no painel administrativo.
+
+
+## Rotina diária da Renda e avisos no celular
+
+O workflow `renda-diaria.yml` roda às 08:00 e às 19:00 (Brasília) e:
+
+1. atualiza os proventos e as cotações de todos os ativos das carteiras (B3, pelo banco);
+2. roda o piloto automático dos espaços que o ligaram (lança proventos anunciados como receita e marca como recebidos no dia do pagamento);
+3. envia os avisos no celular do dia (contas que vencem hoje/amanhã e proventos que caem hoje/amanhã).
+
+Ele precisa de **um segredo** no GitHub (uma vez só):
+
+1. Supabase → **Project Settings → API Keys** → copie a chave **secret** (`sb_secret_…`; em projetos antigos, a `service_role`).
+2. GitHub → repositório → **Settings → Secrets and variables → Actions → New repository secret**.
+3. Nome: `SUPABASE_SERVICE_ROLE_KEY`; valor: a chave copiada → **Add secret**.
+4. Em **Actions → Renda diária → Run workflow**, rode uma vez para gerar as chaves dos avisos.
+
+Sem o segredo, a rotina só registra um aviso e termina; o app continua funcionando (o piloto automático também roda quando alguém abre o app). As chaves dos avisos (VAPID) são criadas na primeira execução e ficam no banco (`push_keys`, sem acesso pelo app).

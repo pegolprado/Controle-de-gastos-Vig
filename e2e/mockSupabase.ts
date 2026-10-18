@@ -73,6 +73,21 @@ export function createState(opts: { withData?: boolean; isOwner?: boolean } = {}
       tx_due_changes: [],
       audit_log: [],
       fii_positions: [],
+      fii_trades: [],
+      renda_settings: [],
+      push_subscriptions: [],
+      stock_companies: [{ code: 'PETR', name: 'PETROBRAS', not_found: false, synced_at: new Date().toISOString() }],
+      // JCP da PETR4 (PN) pago em 21/10/2026; a ON tem outro ISIN e não entra
+      stock_distributions: [
+        { code: 'PETR', isin: 'BRPETRACNPR6', kind: 'JRS CAP PROPRIO', record_date: '2026-08-21', payment_date: '2026-10-21', approved_on: '2026-08-06', rate: 0.67407131, related_to: 'Anual/2026' },
+        { code: 'PETR', isin: 'BRPETRACNOR9', kind: 'DIVIDENDO', record_date: '2026-08-21', payment_date: '2026-10-21', approved_on: '2026-08-06', rate: 9, related_to: 'Anual/2026' },
+      ],
+      asset_quotes: [
+        { ticker: 'XPML11', price: 106.07, change_pct: -1.2, synced_at: new Date().toISOString() },
+        { ticker: 'HSML11', price: 80.5, change_pct: 0.4, synced_at: new Date().toISOString() },
+        { ticker: 'BRCO11', price: 110.2, change_pct: 0.1, synced_at: new Date().toISOString() },
+        { ticker: 'PETR4', price: 59.85, change_pct: 4.34, synced_at: new Date().toISOString() },
+      ],
       fii_funds: [
         { code: 'HSML', name: 'FII HSI MALL', administrator: 'BRL TRUST', not_found: false, synced_at: new Date().toISOString() },
         { code: 'BRCO', name: 'FII BRESCO', administrator: 'OLIVEIRA TRUST', not_found: false, synced_at: new Date().toISOString() },
@@ -218,6 +233,12 @@ export async function installMock(page: Page, s: MockState) {
           });
         case 'fii_sync':
           return json(route, s.tables.fii_funds.some((f) => f.code === String(a.p_ticker).slice(0, 4)) ? 'cached' : 'not_found');
+        case 'asset_sync': {
+          const table = a.p_type === 'stock' ? s.tables.stock_companies : s.tables.fii_funds;
+          return json(route, table.some((f) => f.code === String(a.p_ticker).slice(0, 4)) ? 'cached' : 'not_found');
+        }
+        case 'renda_autopilot':
+          return json(route, 0);
         case 'generate_recurrences':
         case 'refresh_notifications':
           return json(route, 0);
@@ -257,6 +278,19 @@ export async function installMock(page: Page, s: MockState) {
           return route.abort('internetdisconnected');
         }
         const body = req.postDataJSON() as Row | Row[];
+        // upsert (merge-duplicates): atualiza a linha existente pela coluna de conflito
+        const conflict = url.searchParams.get('on_conflict');
+        if (conflict && /merge-duplicates/.test(req.headers()['prefer'] ?? '')) {
+          const cols = conflict.split(',');
+          const merged = (Array.isArray(body) ? body : [body]).map((b) => {
+            const found = rows.find((r) => cols.every((c) => r[c] === b[c]));
+            if (found) return Object.assign(found, b);
+            const row = { ...b } as Row;
+            rows.push(row);
+            return row;
+          });
+          return json(route, single ? merged[0] : merged, 201);
+        }
         const items = (Array.isArray(body) ? body : [body]).map((b) => {
           const dup = b.client_request_id && rows.find((r) => r.client_request_id === b.client_request_id);
           if (dup) return null;
@@ -265,6 +299,18 @@ export async function installMock(page: Page, s: MockState) {
           rows.push(row);
           return row;
         });
+        // gatilho do banco: quantidade e preço médio da posição vêm das operações
+        if (table === 'fii_trades') {
+          for (const t of items) {
+            const pos = s.tables.fii_positions.find((p) => p.id === t!.position_id);
+            if (!pos) continue;
+            const ts = rows.filter((r) => r.position_id === pos.id);
+            pos.quantity = ts.reduce((acc, r) => acc + Number(r.quantity), 0);
+            const priced = ts.filter((r) => Number(r.quantity) > 0 && r.price_cents);
+            const q = priced.reduce((acc, r) => acc + Number(r.quantity), 0);
+            if (q) pos.avg_price_cents = Math.round(priced.reduce((acc, r) => acc + Number(r.quantity) * Number(r.price_cents), 0) / q);
+          }
+        }
         if (/ignore-duplicates/.test(req.headers()['prefer'] ?? '')) return json(route, items.filter(Boolean), 201);
         if (items.includes(null)) return json(route, { code: '23505', message: 'duplicate key value violates unique constraint "transactions_workspace_id_client_request_id_key"', details: 'client_request_id' }, 409);
         return json(route, single ? items[0] : items, 201);

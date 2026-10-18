@@ -1,4 +1,4 @@
-import { Suspense, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, LogOut, Menu, Plus, WifiOff, X } from 'lucide-react';
 import { useAuth } from '@/app/AuthProvider';
@@ -14,6 +14,22 @@ import { Logo } from './Logo';
 import { InstallBanner, InstallMenuItem } from '@/pwa/InstallPrompt';
 import { MOBILE_NAV, NAV, NAV_ADMIN, NAV_SECONDARY } from './nav';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
+import { runAutopilot } from '@/services/fii';
+import { invalidateFinance } from '@/lib/queryClient';
+
+// piloto automático da renda: uma vez por espaço a cada abertura do app
+const autopilotDone = new Set<string>();
+function useRendaAutopilot(ws: string | undefined, canContribute: boolean) {
+  useEffect(() => {
+    if (!ws || !canContribute || autopilotDone.has(ws)) return;
+    autopilotDone.add(ws);
+    void runAutopilot(ws)
+      .then((n) => {
+        if (n) void invalidateFinance(ws);
+      })
+      .catch(() => {});
+  }, [ws, canContribute]);
+}
 
 function SideLink({ to, label, icon: Icon, end, onClick }: { to: string; label: string; icon: typeof Plus; end?: boolean; onClick?: () => void }) {
   return (
@@ -94,6 +110,7 @@ export function AppShell({ banner }: { banner?: ReactNode }) {
   const { canContribute, hideValues, toggleHideValues, workspace } = useWorkspace();
   const online = useOnline();
   const location = useLocation();
+  useRendaAutopilot(workspace?.id, canContribute);
 
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[264px_1fr]">

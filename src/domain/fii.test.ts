@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { featuredPayment, monthStatus, monthView, nextAndLast, normalizeTicker, payoutCents, paymentsFor, payStatus, projectNext, summarize, yieldOnCost } from './fii';
-import type { FiiDistribution, FiiPosition } from '@/lib/types';
+import { featuredPayment, goalPlan, irReport, monthlyPerShare, normalizeStockTicker, qtyAt, stockIsinMatches, undatedFor, monthStatus, monthView, nextAndLast, normalizeTicker, payoutCents, paymentsFor, payStatus, projectNext, summarize, yieldOnCost } from './fii';
+import type { FiiDistribution, FiiPosition, FiiTrade, StockDistribution } from '@/lib/types';
 
-const pos = (ticker: string, quantity: number): FiiPosition => ({ id: ticker, workspace_id: 'w', ticker, quantity, avg_price_cents: null, created_at: '' });
+const pos = (ticker: string, quantity: number, asset_type: 'fii' | 'stock' = 'fii'): FiiPosition => ({ id: ticker, workspace_id: 'w', ticker, asset_type, quantity, avg_price_cents: null, created_at: '' });
 const dist = (code: string, payment_date: string, rate: number): FiiDistribution => ({ code, isin: `BR${code}CTF007`, kind: 'RENDIMENTO', record_date: null, payment_date, approved_on: null, rate, related_to: null });
 
 describe('Renda FII', () => {
@@ -145,5 +145,87 @@ describe('visão do mês vigente', () => {
     const v = monthView(p, '2026-10-17');
     expect(v.mode).toBe('next');
     expect(monthStatus(v.mode, v.featured, '2026-10-17')?.label).toBe('Em novembro');
+  });
+});
+
+describe('compras com data, ações e JCP', () => {
+  const trade = (trade_date: string | null, quantity: number): FiiTrade => ({ id: `${trade_date}${quantity}`, workspace_id: 'w', position_id: 'p', trade_date, quantity, price_cents: null, created_at: '' });
+  const sd = (isin: string, kind: string, rate: number, payment_date: string | null, record_date: string): StockDistribution => ({ code: 'PETR', isin, kind, rate, payment_date, record_date, approved_on: null, related_to: null });
+
+  it('quantidade com direito considera a data da compra', () => {
+    const t = [trade(null, 10), trade('2026-10-10', 5), trade('2026-10-20', -3)];
+    expect(qtyAt(t, '2026-09-30', 12)).toBe(10);
+    expect(qtyAt(t, '2026-10-10', 12)).toBe(15); // comprou na data com: tem direito
+    expect(qtyAt(t, '2026-10-31', 12)).toBe(12);
+    expect(qtyAt([], '2026-01-01', 7)).toBe(7);
+  });
+
+  it('paga só pelas cotas que tinha na data com', () => {
+    const d = [{ ...dist('XPML', '2026-09-25', 0.92), record_date: '2026-09-18' }, { ...dist('XPML', '2026-10-23', 0.92), record_date: '2026-10-16' }];
+    const p = paymentsFor(pos('XPML11', 15), d, [trade('2026-08-01', 10), trade('2026-10-01', 5)]);
+    expect(p.map((x) => [x.dist.payment_date, x.quantity, x.amount_cents])).toEqual([
+      ['2026-10-23', 15, 1380],
+      ['2026-09-25', 10, 920],
+    ]);
+    // comprou depois da data com: não recebe aquele
+    expect(paymentsFor(pos('XPML11', 5), d, [trade('2026-10-20', 5)])).toEqual([]);
+  });
+
+  it('ações: classe pelo ISIN, JCP líquido e data a definir', () => {
+    expect(normalizeStockTicker(' petr4 ')).toBe('PETR4');
+    expect(normalizeStockTicker('HGLG11')).toBe('HGLG11'); // unit também termina em 11
+    expect(normalizeStockTicker('PETR')).toBeNull();
+    expect(stockIsinMatches('PETR4', 'BRPETRACNPR6')).toBe(true);
+    expect(stockIsinMatches('PETR4', 'BRPETRACNOR9')).toBe(false);
+    expect(stockIsinMatches('TAEE11', 'BRTAEECDAM10')).toBe(true);
+    const d = [
+      sd('BRPETRACNPR6', 'JRS CAP PROPRIO', 0.67407131, '2026-11-23', '2026-08-21'),
+      sd('BRPETRACNOR9', 'DIVIDENDO', 9, '2026-11-23', '2026-08-21'),
+      sd('BRPETRACNPR6', 'DIVIDENDO', 0.47156696, null, '2026-08-21'),
+    ];
+    const p = paymentsFor(pos('PETR4', 100, 'stock'), d);
+    expect(p).toHaveLength(1);
+    expect(p[0]!.amount_cents).toBe(5729); // 100 × 0,674 × 85%
+    expect(undatedFor(pos('PETR4', 100, 'stock'), d)).toEqual([{ kind: 'DIVIDENDO', rate: 0.47156696, record_date: '2026-08-21', amount_cents: 4715 }]);
+  });
+});
+
+describe('meta de renda passiva e IR', () => {
+  it('renda por cota: FII usa o último; ação, a média de 12 meses', () => {
+    const f = paymentsFor(pos('XPML11', 10), [dist('XPML', '2026-09-25', 0.92), dist('XPML', '2026-08-25', 0.9)]);
+    expect(monthlyPerShare('fii', f, '2026-10-17')).toBe(0.92);
+    const st = paymentsFor(pos('ITSA4', 100, 'stock'), [
+      { code: 'ITSA', isin: 'BRITSAACNPR7', kind: 'DIVIDENDO', rate: 1.2, payment_date: '2026-05-01', record_date: null, approved_on: null, related_to: null },
+      { code: 'ITSA', isin: 'BRITSAACNPR7', kind: 'DIVIDENDO', rate: 9, payment_date: '2024-01-01', record_date: null, approved_on: null, related_to: null },
+    ]);
+    expect(monthlyPerShare('stock', st, '2026-10-17')).toBeCloseTo(0.1);
+  });
+
+  it('plano da meta: quanto falta e quantas cotas de cada ativo', () => {
+    const g = goalPlan(100000, [
+      { ticker: 'XPML11', quantity: 10, perShare: 0.92, price: 104.5 },
+      { ticker: 'MXRF11', quantity: 100, perShare: 0.1, price: 9.5 },
+    ]);
+    expect(g.current_cents).toBe(1920);
+    expect(g.missing_cents).toBe(98080);
+    expect(g.rows[0]).toMatchObject({ ticker: 'MXRF11', sharesNeeded: 9808 }); // rende mais por real (1,05% a.m.)
+    expect(g.rows[1]).toMatchObject({ ticker: 'XPML11', sharesNeeded: 1067, cost_cents: 11150150 });
+  });
+
+  it('relatório de IR por grupo, só o que foi pago no ano', () => {
+    const xp = paymentsFor(pos('XPML11', 10), [dist('XPML', '2025-12-26', 0.9), dist('XPML', '2026-01-26', 0.9), dist('XPML', '2027-01-25', 1)]);
+    const petr = paymentsFor(pos('PETR4', 100, 'stock'), [
+      { code: 'PETR', isin: 'BRPETRACNPR6', kind: 'JRS CAP PROPRIO', rate: 1, payment_date: '2026-03-01', record_date: null, approved_on: null, related_to: null },
+      { code: 'PETR', isin: 'BRPETRACNPR6', kind: 'DIVIDENDO', rate: 0.5, payment_date: '2026-03-01', record_date: null, approved_on: null, related_to: null },
+    ]);
+    const r = irReport(2026, [
+      { ticker: 'XPML11', name: 'FII XP MALLS', assetType: 'fii', payments: xp },
+      { ticker: 'PETR4', name: 'PETROBRAS', assetType: 'stock', payments: petr },
+    ], '2026-12-31');
+    expect(r.map((x) => [x.group, x.ticker, x.total_cents])).toEqual([
+      ['fii', 'XPML11', 900],
+      ['dividendos', 'PETR4', 5000],
+      ['jcp', 'PETR4', 8500],
+    ]);
   });
 });

@@ -87,6 +87,8 @@ export default defineConfig({
         // O manifesto (nome e ícone do app instalado) fica FORA do cache — o
         // plugin sempre o inclui, então scripts/postbuild.mjs o remove do sw.js.
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // avisos no celular (Web Push): recebe e abre a notificação
+        importScripts: [`${base}push-sw.js`],
         // o gerador de PDF é pesado e raro: baixado sob demanda, não no pré-cache
         globIgnores: ['**/jspdf*.js', '**/html2canvas*.js', '**/index.es-*.js', '**/purify*.js', '**/jspdf.plugin*.js'],
         navigateFallback: `${base}index.html`,
