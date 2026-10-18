@@ -146,6 +146,7 @@ def render_pdf(data: dict, report: Report) -> bytes:
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.platypus import (
+        Image,
         KeepTogether,
         PageBreak,
         Paragraph,
@@ -200,7 +201,7 @@ def render_pdf(data: dict, report: Report) -> bytes:
         canvas.rect(0, h - 14 * mm, w, 14 * mm, stroke=0, fill=1)
         canvas.setFillColor(colors.white)
         canvas.setFont(bold, 9)
-        canvas.drawString(15 * mm, h - 9 * mm, "iaMARX · TELECOM INTELLIGENCE")
+        canvas.drawString(15 * mm, h - 9 * mm, "iaMARX · INTELLIGENCE PRO")
         canvas.setFont(font, 8)
         canvas.drawRightString(w - 15 * mm, h - 9 * mm, f"Caso {case['code']} · Relatório {report.code}")
         canvas.setFillColor(grey)
@@ -221,7 +222,12 @@ def render_pdf(data: dict, report: Report) -> bytes:
     W = A4[0] - 30 * mm
     story = []
     # ---------------- capa
-    story += [Spacer(1, 45 * mm), P("iaMARX · TELECOM INTELLIGENCE", "sub"), Spacer(1, 6 * mm), Paragraph(html.escape(report.title), st["title"]), Spacer(1, 4 * mm)]
+    logo = Path(__file__).resolve().parents[1] / "assets_logo.jpg"
+    if logo.exists():
+        story += [Spacer(1, 8 * mm), Image(str(logo), width=78 * mm, height=78 * mm), Spacer(1, 2 * mm)]
+    else:
+        story += [Spacer(1, 45 * mm), P("iaMARX · INTELLIGENCE PRO", "sub")]
+    story += [Spacer(1, 6 * mm), Paragraph(html.escape(report.title), st["title"]), Spacer(1, 4 * mm)]
     story.append(P(f"Caso {case['code']} — {case['title']}", "sub"))
     if case.get("process_number"):
         story.append(P(f"Referência processual: {case['process_number']}", "sub"))
@@ -617,7 +623,7 @@ def render_html(data: dict, report: Report) -> bytes:
         )
         return f'<svg viewBox="0 0 600 125" class="chart" role="img">{rects}</svg>'
 
-    parts = [f"<h1>{e(report.title)}</h1><p class='meta'>Caso {e(case['code'])} — {e(case['title'])} · Relatório {e(report.code)} · gerado em {e(gen['at'][:19])} UTC por {e(gen['by'])} · v{e(gen['app_version'])} · regras {e(gen['rules_version'])}</p>"]
+    parts = [f"<p class='brand'>ia<b>MARX</b> · INTELLIGENCE PRO</p><h1>{e(report.title)}</h1><p class='meta'>Caso {e(case['code'])} — {e(case['title'])} · Relatório {e(report.code)} · gerado em {e(gen['at'][:19])} UTC por {e(gen['by'])} · v{e(gen['app_version'])} · regras {e(gen['rules_version'])}</p>"]
     if case.get("is_demo"):
         parts.append("<p class='demo'>DEMONSTRAÇÃO — dados sintéticos, sem valor investigativo</p>")
     parts.append("<h2>Arquivos utilizados</h2>" + tbl(["#", "Arquivo", "Tipo", "Operadora", "SHA-256"], [[x["id"], x["name"], x["kind"], x["operator"], x["sha256"]] for x in data["files"]]))
@@ -643,6 +649,7 @@ h1{color:#0b1220}h2{color:#2f6fdf;border-bottom:1px solid #c9d2e3;padding-bottom
 .demo{background:#fde8e4;color:#9a2b17;padding:8px 12px;border-radius:6px;font-weight:700}
 table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0}th{background:#0b1220;color:#fff;text-align:left}
 th,td{border:1px solid #c9d2e3;padding:4px 6px;vertical-align:top;word-break:break-word}tr:nth-child(even) td{background:#f3f6fb}
+.brand{font:600 13px/1 monospace;letter-spacing:.25em;color:#b5831f;margin:0 0 6px}.brand b{color:#b5831f}
 .chart{width:100%;max-width:700px;height:auto;background:#f3f6fb;border-radius:6px}"""
     doc = f"<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><meta name='robots' content='noindex'><title>{e(report.code)}</title><style>{css}</style></head><body>{''.join(parts)}</body></html>"
     return doc.encode("utf-8")

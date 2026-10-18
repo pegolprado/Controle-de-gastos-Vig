@@ -29,10 +29,12 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col gap-1 p-4">
       <Link to="/" onClick={onNavigate} className="mb-5 flex items-center gap-3 px-2">
-        <img src="/favicon.svg" alt="" className="h-9 w-9" />
+        <img src="/icon-192.png" alt="" className="h-11 w-11 rounded-xl" />
         <div>
-          <div className="font-mono text-sm font-bold tracking-wider text-white">iaMARX</div>
-          <div className="font-mono text-[10px] tracking-[0.2em] text-faint">TELECOM INTELLIGENCE</div>
+          <div className="text-lg leading-tight font-bold tracking-wide text-white">
+            ia<span className="text-gold">MARX</span>
+          </div>
+          <div className="font-mono text-[10px] tracking-[0.25em] text-gold">INTELLIGENCE PRO</div>
         </div>
       </Link>
       <NavItem to="/" end icon={<LayoutGrid />} onClick={onNavigate}>

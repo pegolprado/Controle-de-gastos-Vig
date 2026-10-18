@@ -43,6 +43,7 @@ export default function Dashboard() {
     <div>
       <div className="mt-2 mb-10 text-center">
         <div className="font-mono text-xs tracking-[0.35em] text-faint">WORKSPACE INVESTIGATIVO</div>
+        <div className="mt-2 font-mono text-[11px] tracking-[0.3em] text-gold">ANÁLISE • CONEXÕES • INTELIGÊNCIA</div>
         <p className="mt-3 text-sm text-muted">
           Olá, {me?.name}.{' '}
           {current ? (

@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="iaMARX Telecom Intelligence",
+    title="iaMARX Intelligence Pro",
     version=APP_VERSION,
     lifespan=lifespan,
     docs_url="/api/docs" if settings.env != "production" else None,
