@@ -32,7 +32,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <img src="/icon-192.png" alt="" className="h-11 w-11 rounded-xl" />
         <div>
           <div className="text-lg leading-tight font-bold tracking-wide text-white">
-            ia<span className="text-gold">MARX</span>
+            MAR<span className="text-gold">X</span>
           </div>
           <div className="font-mono text-[10px] tracking-[0.25em] text-gold">INTELLIGENCE PRO</div>
         </div>

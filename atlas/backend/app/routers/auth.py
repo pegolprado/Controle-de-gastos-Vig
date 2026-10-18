@@ -170,7 +170,7 @@ def forgot(body: ForgotIn, request: Request, db: Session = Depends(get_db)):
     if user and user.is_active:
         link = create_reset_link(db, user)
         try:
-            sent = _send_mail(user.email, "iaMARX — redefinição de senha",
+            sent = _send_mail(user.email, "MARX — redefinição de senha",
                               f"Olá, {user.name}.\n\nPara definir uma nova senha, acesse (válido por 2 horas):\n{link}\n\nSe você não pediu, ignore esta mensagem.")
         except Exception:  # noqa: BLE001
             sent = False
@@ -231,7 +231,7 @@ def mfa_setup(user: User = Depends(current_user), db: Session = Depends(get_db))
         raise HTTPException(400, "Já ativa")
     user.mfa_secret = pyotp.random_base32()
     db.commit()
-    uri = pyotp.TOTP(user.mfa_secret).provisioning_uri(name=user.email, issuer_name="iaMARX")
+    uri = pyotp.TOTP(user.mfa_secret).provisioning_uri(name=user.email, issuer_name="MARX")
     return {"secret": user.mfa_secret, "otpauth": uri}
 
 

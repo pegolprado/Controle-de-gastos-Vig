@@ -1,8 +1,8 @@
-# iaMARX — Intelligence Pro
+# MARX — Intelligence Pro
 
 *Análise • Conexões • Inteligência*
 
-<img src="brand/logo-original.png" alt="iaMARX Intelligence Pro" width="280">
+<img src="brand/logo-original.png" alt="MARX Intelligence Pro" width="280">
 
 Plataforma web para importar, normalizar, correlacionar e analisar bilhetagens telefônicas (CDR) e extratos/cadastros
 de ERB fornecidos por operadoras (TIM, Vivo, Claro e outras), mediante autorização legal — com rastreabilidade de
@@ -30,6 +30,7 @@ cada resultado até a linha do arquivo original, permissões por caso e trilha d
 
 ## Começo rápido
 
+- **Testar no seu computador**: [docs/TESTAR-NO-COMPUTADOR.md](docs/TESTAR-NO-COMPUTADOR.md)
 - Produção em **iamarx.com.br**: [docs/DEPLOY.md](docs/DEPLOY.md)
 - Operação, backup e restauração: [docs/OPERACAO.md](docs/OPERACAO.md)
 - Segurança e LGPD: [docs/SEGURANCA.md](docs/SEGURANCA.md)

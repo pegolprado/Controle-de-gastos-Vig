@@ -1,6 +1,6 @@
-# Publicar o iaMARX em iamarx.com.br
+# Publicar o MARX em iamarx.com.br
 
-O iaMARX precisa de um **servidor** (back-end Python + PostgreSQL + fila de tarefas). Hospedagens de site estático
+O MARX precisa de um **servidor** (back-end Python + PostgreSQL + fila de tarefas). Hospedagens de site estático
 (Cloudflare Pages, GitHub Pages, hospedagem compartilhada) **não servem**. O caminho recomendado é um servidor
 virtual (VPS) Linux com Docker. O Caddy, incluído, obtém e renova o certificado HTTPS sozinho.
 
@@ -42,7 +42,7 @@ A propagação costuma levar minutos (até algumas horas). Confira com `dig +sho
 su - atlas
 git clone https://github.com/pegolprado/Controle-de-gastos-Vig.git && cd Controle-de-gastos-Vig/atlas
 cp .env.example .env
-nano .env          # DOMAIN=iamarx.com.br, ACME_EMAIL, SECRET_KEY e POSTGRES_PASSWORD fortes
+nano .env          # DOMAIN=iamarx.com.br, SECRET_KEY e POSTGRES_PASSWORD fortes
 docker compose up -d --build
 docker compose exec api python -m app.cli create-admin --email voce@iamarx.com.br --name "Seu nome"
 ```

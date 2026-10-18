@@ -12,13 +12,13 @@ function AuthCard({ title, children }: { title: string; children: React.ReactNod
         <div className="mb-6 text-center">
           <img
             src="/logo.webp"
-            alt="iaMARX Intelligence Pro — Análise • Conexões • Inteligência"
+            alt="MARX Intelligence Pro — Análise • Conexões • Inteligência"
             width={640}
             height={678}
             className="mx-auto h-auto w-72 sm:w-80"
             style={{ maskImage: 'radial-gradient(ellipse 72% 70% at 50% 48%, #000 62%, transparent 100%)', WebkitMaskImage: 'radial-gradient(ellipse 72% 70% at 50% 48%, #000 62%, transparent 100%)' }}
           />
-          <h1 className="sr-only">iaMARX Intelligence Pro</h1>
+          <h1 className="sr-only">MARX Intelligence Pro</h1>
         </div>
         <div className="card border-accent/40 p-6">
           <h2 className="mb-4 text-lg font-bold text-white">{title}</h2>

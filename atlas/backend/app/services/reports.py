@@ -201,7 +201,7 @@ def render_pdf(data: dict, report: Report) -> bytes:
         canvas.rect(0, h - 14 * mm, w, 14 * mm, stroke=0, fill=1)
         canvas.setFillColor(colors.white)
         canvas.setFont(bold, 9)
-        canvas.drawString(15 * mm, h - 9 * mm, "iaMARX · INTELLIGENCE PRO")
+        canvas.drawString(15 * mm, h - 9 * mm, "MARX · INTELLIGENCE PRO")
         canvas.setFont(font, 8)
         canvas.drawRightString(w - 15 * mm, h - 9 * mm, f"Caso {case['code']} · Relatório {report.code}")
         canvas.setFillColor(grey)
@@ -226,7 +226,7 @@ def render_pdf(data: dict, report: Report) -> bytes:
     if logo.exists():
         story += [Spacer(1, 8 * mm), Image(str(logo), width=78 * mm, height=78 * mm), Spacer(1, 2 * mm)]
     else:
-        story += [Spacer(1, 45 * mm), P("iaMARX · INTELLIGENCE PRO", "sub")]
+        story += [Spacer(1, 45 * mm), P("MARX · INTELLIGENCE PRO", "sub")]
     story += [Spacer(1, 6 * mm), Paragraph(html.escape(report.title), st["title"]), Spacer(1, 4 * mm)]
     story.append(P(f"Caso {case['code']} — {case['title']}", "sub"))
     if case.get("process_number"):
@@ -623,7 +623,7 @@ def render_html(data: dict, report: Report) -> bytes:
         )
         return f'<svg viewBox="0 0 600 125" class="chart" role="img">{rects}</svg>'
 
-    parts = [f"<p class='brand'>ia<b>MARX</b> · INTELLIGENCE PRO</p><h1>{e(report.title)}</h1><p class='meta'>Caso {e(case['code'])} — {e(case['title'])} · Relatório {e(report.code)} · gerado em {e(gen['at'][:19])} UTC por {e(gen['by'])} · v{e(gen['app_version'])} · regras {e(gen['rules_version'])}</p>"]
+    parts = [f"<p class='brand'><b>MARX</b> · INTELLIGENCE PRO</p><h1>{e(report.title)}</h1><p class='meta'>Caso {e(case['code'])} — {e(case['title'])} · Relatório {e(report.code)} · gerado em {e(gen['at'][:19])} UTC por {e(gen['by'])} · v{e(gen['app_version'])} · regras {e(gen['rules_version'])}</p>"]
     if case.get("is_demo"):
         parts.append("<p class='demo'>DEMONSTRAÇÃO — dados sintéticos, sem valor investigativo</p>")
     parts.append("<h2>Arquivos utilizados</h2>" + tbl(["#", "Arquivo", "Tipo", "Operadora", "SHA-256"], [[x["id"], x["name"], x["kind"], x["operator"], x["sha256"]] for x in data["files"]]))
