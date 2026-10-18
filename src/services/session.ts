@@ -27,3 +27,8 @@ export async function fetchLatestRelease() {
     .limit(10);
   return res.data ?? [];
 }
+
+/** Registra que a pessoa está usando o app (o servidor grava no máximo a cada 5 min). */
+export async function touchLastSeen() {
+  await supabase.rpc('touch_last_seen');
+}

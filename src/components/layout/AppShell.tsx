@@ -15,7 +15,23 @@ import { InstallBanner, InstallMenuItem } from '@/pwa/InstallPrompt';
 import { MOBILE_NAV, NAV, NAV_ADMIN, NAV_SECONDARY } from './nav';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { runAutopilot } from '@/services/fii';
+import { touchLastSeen } from '@/services/session';
 import { invalidateFinance } from '@/lib/queryClient';
+
+// "último acesso" do painel do proprietário: ao abrir e ao voltar do segundo plano
+function useLastSeen() {
+  useEffect(() => {
+    let last = 0;
+    const touch = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < 5 * 60_000) return;
+      last = Date.now();
+      void touchLastSeen().catch(() => {});
+    };
+    touch();
+    document.addEventListener('visibilitychange', touch);
+    return () => document.removeEventListener('visibilitychange', touch);
+  }, []);
+}
 
 // piloto automático da renda: uma vez por espaço a cada abertura do app
 const autopilotDone = new Set<string>();
@@ -111,6 +127,7 @@ export function AppShell({ banner }: { banner?: ReactNode }) {
   const online = useOnline();
   const location = useLocation();
   useRendaAutopilot(workspace?.id, canContribute);
+  useLastSeen();
 
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[264px_1fr]">
