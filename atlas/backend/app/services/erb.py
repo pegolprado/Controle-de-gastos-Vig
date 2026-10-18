@@ -14,6 +14,7 @@ ECI (4G) e NCI (5G) só se comparam com o mesmo tipo de identificador.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -176,6 +177,13 @@ def build_index(db: Session, case_id: int, version_ids: list[int] | None) -> tup
 
 
 SIG_COLS = ("operator", "tech", "mcc", "mnc", "lac", "tac", "cell_id", "eci", "nci", "cgi", "erb_raw")
+NULL_MARK = "\u2205"  # marcador de nulo usado igualmente no Python e no SQL
+# Chave da assinatura calculada igual no Python e no SQL (junção por igualdade = hash join).
+SIG_SQL = "md5(concat_ws('|', " + ", ".join(f"coalesce(e.{c}, '{NULL_MARK}')" for c in SIG_COLS) + "))"
+
+
+def _sig_key(s) -> str:
+    return hashlib.md5("|".join(NULL_MARK if s[c] is None else str(s[c]) for c in SIG_COLS).encode()).hexdigest()
 
 
 def run_resolution(db: Session, case_id: int, version_ids: list[int] | None, user_id: int | None, progress=None) -> dict:
@@ -190,32 +198,35 @@ def run_resolution(db: Session, case_id: int, version_ids: list[int] | None, use
     ).mappings().all()
     stats = defaultdict(int)
     stats_events = defaultdict(int)
+    rows = []
     for i, s in enumerate(sigs):
-        r = resolve_signature(dict(s), idx, versions) if versions else {
-            "status": "none", "rule": "sem_cadastro", "cell": None, "candidates": [],
-            "note": "ERB não resolvida: nenhum cadastro técnico importado no caso",
-        }
         if not any(s[k] for k in ("cell_id", "eci", "nci", "cgi", "erb_raw")):
             r = {"status": "none", "rule": "sem_identificador", "cell": None, "candidates": [], "note": "ERB não resolvida: evento sem identificador de célula"}
-        cond = " AND ".join(f"{k} IS NOT DISTINCT FROM :{k}" for k in SIG_COLS)
+        elif not versions:
+            r = {"status": "none", "rule": "sem_cadastro", "cell": None, "candidates": [], "note": "ERB não resolvida: nenhum cadastro técnico importado no caso"}
+        else:
+            r = resolve_signature(dict(s), idx, versions)
         cell = r["cell"]
-        db.execute(
-            text(
-                f"""UPDATE events SET resolved_cell_id = :cell, resolution_status = :st, resolution_rule = :rule,
-                           resolution_version_id = :ver, resolution_note = :note,
-                           resolution_candidates = CAST(:cands AS jsonb)
-                     WHERE case_id = :c AND NOT resolution_manual AND {cond}"""
-            ),
-            {
-                **{k: s[k] for k in SIG_COLS}, "c": case_id, "cell": cell.id if cell else None, "st": r["status"],
-                "rule": r["rule"], "ver": cell.version_id if cell else None, "note": r["note"],
-                "cands": json.dumps(r["candidates"]),
-            },
-        )
+        rows.append((_sig_key(s), cell.id if cell else None, r["status"], r["rule"], cell.version_id if cell else None, r["note"], json.dumps(r["candidates"])))
         stats[r["status"]] += 1
         stats_events[r["status"]] += s["n"]
-        if progress and i % 50 == 0:
+        if progress and i % 200 == 0:
             progress(i, len(sigs))
+    cur = db.connection().connection.driver_connection.cursor()
+    cur.execute("CREATE TEMP TABLE IF NOT EXISTS _sig_res (k text PRIMARY KEY, cell int, st text, rule text, ver int, note text, cands jsonb) ON COMMIT DROP")
+    cur.execute("TRUNCATE _sig_res")
+    with cur.copy("COPY _sig_res (k, cell, st, rule, ver, note, cands) FROM STDIN") as cp:
+        for row in rows:
+            cp.write_row(row)
+    db.execute(
+        text(
+            f"""UPDATE events e SET resolved_cell_id = r.cell, resolution_status = r.st, resolution_rule = r.rule,
+                       resolution_version_id = r.ver, resolution_note = r.note, resolution_candidates = r.cands
+                  FROM _sig_res r
+                 WHERE e.case_id = :c AND NOT e.resolution_manual AND {SIG_SQL} = r.k"""
+        ),
+        {"c": case_id},
+    )
     result = {
         "signatures": len(sigs),
         "by_status_signatures": dict(stats),

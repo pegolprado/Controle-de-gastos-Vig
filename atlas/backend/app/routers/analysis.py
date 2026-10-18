@@ -456,3 +456,16 @@ def ask(body: AskIn, request: Request, access: CaseAccess = Depends(case_access)
     audit.log(db, "assistente.consulta", access.user, case_id=access.case.id, ip=client_ip(request), details={"pergunta": body.question[:300]})
     return assistant.answer(db, access.case.id, body.question, targets)
 
+
+
+class ExportLogIn(BaseModel):
+    kind: str = Field(max_length=60)
+    filters: dict = {}
+
+
+@router.post("/exports/log")
+def export_log(body: ExportLogIn, request: Request, access: CaseAccess = Depends(case_exporter), db: Session = Depends(get_db)):
+    """Exportações geradas no navegador (grafo PNG/CSV) também ficam na trilha de auditoria;
+    o próprio endpoint exige permissão de exportação."""
+    audit.log(db, "exportacao.cliente", access.user, case_id=access.case.id, ip=client_ip(request), details={"tipo": body.kind, "filtros": body.filters})
+    return {"ok": True}

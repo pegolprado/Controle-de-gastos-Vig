@@ -1,0 +1,72 @@
+# Implantação de produção (um servidor). Uso:
+#   cp .env.example .env   # preencha
+#   docker compose up -d --build
+#   docker compose exec api python -m app.cli create-admin --email voce@dominio --name "Seu nome"
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: atlas
+      POSTGRES_USER: atlas
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atlas -d atlas"]
+      interval: 5s
+      retries: 20
+    shm_size: 512mb
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://atlas:${POSTGRES_PASSWORD}@db:5432/atlas
+      ATLAS_ENV: production
+      COOKIE_SECURE: "true"
+      EMBEDDED_WORKER: "false"
+      PUBLIC_URL: https://${DOMAIN}
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    command: ["python", "-m", "app.cli", "worker"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://atlas:${POSTGRES_PASSWORD}@db:5432/atlas
+      ATLAS_ENV: production
+      EMBEDDED_WORKER: "false"
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      api:
+        condition: service_started
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  storage:
+  caddy_data:
+  caddy_config:

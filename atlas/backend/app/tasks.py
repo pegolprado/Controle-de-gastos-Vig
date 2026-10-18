@@ -26,6 +26,7 @@ def _import(ctx: JobContext) -> dict:
     if ctx.params.get("auto_resolve", True):
         ctx.progress(0, None, "resolvendo identificadores de ERB", force=True)
         erb_svc.run_resolution(ctx.db, imp.case_id, None, ctx.job.created_by)
+    ctx.progress(1, 1, "importação concluída", force=True)
     user = ctx.db.get(User, ctx.job.created_by) if ctx.job.created_by else None
     audit.log(ctx.db, "import.processado", user, case_id=imp.case_id, entity="import", entity_id=imp.id,
               details={k: v for k, v in res.items() if k != "trace"})

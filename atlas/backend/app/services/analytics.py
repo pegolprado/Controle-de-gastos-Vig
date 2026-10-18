@@ -44,6 +44,8 @@ class EventFilter(BaseModel):
     min_confidence: float | None = None
     include_duplicates: bool = False
     include_out_of_scope: bool = False
+    only_duplicates: bool = False
+    only_out_of_scope: bool = False
     imei: str | None = None
     ip: str | None = None
 
@@ -60,9 +62,13 @@ def _norm_list(nums: list[str]) -> list[str]:
 def where(case_id: int, f: EventFilter, a: str = "e") -> tuple[str, dict]:
     c = [f"{a}.case_id = :case_id"]
     p: dict = {"case_id": case_id}
-    if not f.include_duplicates:
+    if f.only_duplicates:
+        c.append(f"{a}.is_duplicate")
+    elif not f.include_duplicates:
         c.append(f"NOT {a}.is_duplicate")
-    if not f.include_out_of_scope:
+    if f.only_out_of_scope:
+        c.append(f"{a}.out_of_scope")
+    elif not f.include_out_of_scope:
         c.append(f"NOT {a}.out_of_scope")
     if f.numbers:
         p["numbers"] = _norm_list(f.numbers)

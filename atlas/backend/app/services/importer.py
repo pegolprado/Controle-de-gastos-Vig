@@ -411,17 +411,25 @@ def _copy_events(conn, rows: list[dict], base: dict) -> None:
             cp.write_row([rec.get(c) for c in EVENT_COPY_COLUMNS])
 
 
+def _raw(db: Session):
+    """Conexão psycopg da transação ATUAL da sessão (muda após cada commit)."""
+    return db.connection().connection.driver_connection
+
+
 def recompute_duplicates(db: Session, case_id: int) -> int:
+    """Marca como duplicado todo registro com o mesmo dedup_hash de um registro anterior
+    (menor id) do mesmo caso. Junção pela chave primária: escala para milhões de linhas."""
     res = db.execute(
         text(
             """
             UPDATE events e
-               SET is_duplicate = (e.id <> f.first_id),
-                   duplicate_of = NULLIF(f.first_id, e.id)
-              FROM (SELECT dedup_hash, min(id) AS first_id FROM events WHERE case_id = :c GROUP BY dedup_hash) f
-             WHERE e.case_id = :c AND e.dedup_hash = f.dedup_hash
-               AND (e.is_duplicate IS DISTINCT FROM (e.id <> f.first_id)
-                    OR e.duplicate_of IS DISTINCT FROM NULLIF(f.first_id, e.id))
+               SET is_duplicate = (e.id <> d.first_id),
+                   duplicate_of = NULLIF(d.first_id, e.id)
+              FROM (SELECT id, min(id) OVER (PARTITION BY dedup_hash) AS first_id
+                      FROM events WHERE case_id = :c) d
+             WHERE e.id = d.id
+               AND (e.is_duplicate IS DISTINCT FROM (e.id <> d.first_id)
+                    OR e.duplicate_of IS DISTINCT FROM NULLIF(d.first_id, e.id))
             """
         ),
         {"c": case_id},
@@ -450,7 +458,6 @@ def run_cdr_import(ctx, imp: Import) -> dict:
     stored_issues = 0
     total = 0
     types = Counter()
-    raw_conn = db.connection().connection.driver_connection  # psycopg na mesma transação
     for raw, rec in table.rows():
         total += 1
         if total > settings.max_rows_per_import:
@@ -478,7 +485,7 @@ def run_cdr_import(ctx, imp: Import) -> dict:
                 counts["out_of_scope"] += 1
             batch.append(ev)
         if len(batch) >= BATCH:
-            _copy_events(raw_conn, batch, base)
+            _copy_events(_raw(db), batch, base)
             batch.clear()
             if issues_batch:
                 db.execute(insert(ImportIssue), issues_batch)
@@ -486,7 +493,7 @@ def run_cdr_import(ctx, imp: Import) -> dict:
             db.commit()
             ctx.progress(total, max(est_total, total), f"{total:,} linhas processadas".replace(",", "."), errors=counts["error"])
     if batch:
-        _copy_events(raw_conn, batch, base)
+        _copy_events(_raw(db), batch, base)
     if issues_batch:
         db.execute(insert(ImportIssue), issues_batch)
     db.commit()

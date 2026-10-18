@@ -224,3 +224,16 @@ def test_demo_seed_and_clear(analyst):
     after = analyst.get("/api/cases").json()
     assert not any(c["is_demo"] for c in after)
     assert [c["id"] for c in after if not c["is_demo"]] == real_before
+
+
+def test_multi_batch_import(analyst):
+    """Arquivo maior que um lote de gravação (5.000 linhas): todos os lotes devem ser gravados."""
+    cid = analyst.post("/api/cases", json={"title": "Volume multi-lote"}).json()["id"]
+    lines = ["Número A;Número B;Data;Hora;Duração;Tipo"]
+    for i in range(12_345):
+        lines.append(f"(61) 90000-2001;(61) 98{i % 900:03d}-{i % 10000:04d};{1 + i % 28:02d}/03/2026;{i % 24:02d}:{i % 60:02d}:{(i * 7) % 60:02d};{i % 300};Originada")
+    f = upload(analyst, cid, "grande.csv", "\n".join(lines).encode())
+    _, imp = configure_and_run(analyst, cid, f, "cdr", {"tz_mode": "assumed"})
+    assert imp["rows_total"] == 12_345 and imp["rows_ok"] + imp["rows_duplicate"] >= 12_345 - imp["rows_error"]
+    total = analyst.post(f"/api/cases/{cid}/events/search", json={"filter": {"include_duplicates": True}, "size": 1}).json()["total"]
+    assert total == imp["rows_ok"] == 12_345
