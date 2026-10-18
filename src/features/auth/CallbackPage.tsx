@@ -17,7 +17,10 @@ export default function CallbackPage() {
     const t = setTimeout(async () => {
       const { data, error: err } = await supabase.auth.getSession();
       if (err) setError(errorMessage(err));
-      else navigate(data.session ? safeNext : '/entrar', { replace: true });
+      // o e-mail já foi confirmado pelo servidor antes de chegar aqui; sem sessão significa que o
+      // link abriu em outro navegador/app (a sessão só abre onde a conta foi criada): basta entrar
+      else if (data.session) navigate(safeNext, { replace: true });
+      else navigate('/entrar', { replace: true, state: { confirmed: true, from: safeNext } });
     }, 300);
     return () => clearTimeout(t);
   }, [error, navigate, params]);
