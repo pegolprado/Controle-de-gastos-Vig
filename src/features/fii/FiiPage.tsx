@@ -16,7 +16,7 @@ import { formatBRL } from '@/lib/money';
 import { errorMessage } from '@/lib/errors';
 import { invalidateFinance, queryClient } from '@/lib/queryClient';
 import type { FiiPosition, FiiTrade } from '@/lib/types';
-import { baseCode, monthlyPerShare, monthView, paymentsFor, summarize, undatedFor, type FiiPayment, type MonthMode } from '@/domain/fii';
+import { baseCode, type Holding, monthlyPerShare, monthView, paymentsFor, summarize, undatedFor, type FiiPayment, type MonthMode } from '@/domain/fii';
 import {
   deleteFiiPosition,
   deleteTrade,
@@ -30,6 +30,7 @@ import {
 } from '@/services/fii';
 import { listByRequestIds } from '@/services/transactions';
 import { AddAssetDialog, LaunchDialog, TradeDialog } from './dialogs';
+import { PortfolioOverview } from './PortfolioOverview';
 import { PositionCard } from './PositionCard';
 import { launchId, useToday } from './shared';
 import { AgendaTab, GoalTab, IrTab } from './tabs';
@@ -139,6 +140,22 @@ export default function FiiPage() {
         price: quoteOf.get(x.position.ticker)?.price ?? null,
       })),
     [byPosition, quoteOf, today],
+  );
+  const holdings = useMemo<Holding[]>(
+    () =>
+      byPosition.map((x) => ({
+        ticker: x.position.ticker,
+        type: x.position.asset_type ?? 'fii',
+        quantity: x.position.quantity,
+        price: quoteOf.get(x.position.ticker)?.price ?? null,
+        avgPriceCents: x.position.avg_price_cents,
+        perShare: monthlyPerShare(x.position.asset_type ?? 'fii', x.payments, today),
+      })),
+    [byPosition, quoteOf, today],
+  );
+  const tickerNames = useMemo(
+    () => new Map(byPosition.map((x) => [x.position.ticker, nameOf.get(`${x.position.asset_type ?? 'fii'}:${baseCode(x.position.ticker)}`) ?? null])),
+    [byPosition, nameOf],
   );
   const irItems = useMemo(
     () =>
@@ -257,6 +274,7 @@ export default function FiiPage() {
 
           {tab === 'carteira' && (
             <>
+              {!loading && <PortfolioOverview holdings={holdings} names={tickerNames} />}
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {loading
                   ? [0, 1].map((i) => <Skeleton key={i} className="h-40" />)
