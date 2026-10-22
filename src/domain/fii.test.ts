@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { featuredPayment, goalPlan, irReport, monthlyPerShare, normalizeStockTicker, qtyAt, stockIsinMatches, undatedFor, monthStatus, monthView, nextAndLast, normalizeTicker, payoutCents, paymentsFor, payStatus, projectNext, summarize, yieldOnCost } from './fii';
+import { breakdown, portfolioStats, featuredPayment, goalPlan, irReport, monthlyPerShare, normalizeStockTicker, qtyAt, stockIsinMatches, undatedFor, monthStatus, monthView, nextAndLast, normalizeTicker, payoutCents, paymentsFor, payStatus, projectNext, summarize, yieldOnCost } from './fii';
 import type { FiiDistribution, FiiPosition, FiiTrade, StockDistribution } from '@/lib/types';
 
 const pos = (ticker: string, quantity: number, asset_type: 'fii' | 'stock' = 'fii'): FiiPosition => ({ id: ticker, workspace_id: 'w', ticker, asset_type, quantity, avg_price_cents: null, created_at: '' });
@@ -227,5 +227,45 @@ describe('meta de renda passiva e IR', () => {
       ['dividendos', 'PETR4', 5000],
       ['jcp', 'PETR4', 8500],
     ]);
+  });
+});
+
+describe('composição da carteira', () => {
+  const h = (ticker: string, type: 'fii' | 'stock', quantity: number, price: number | null, avg: number | null, perShare = 0) => ({ ticker, type, quantity, price, avgPriceCents: avg, perShare });
+  const carteira = [
+    h('MXRF11', 'fii', 26, 9.46, 950, 0.1),
+    h('GRND3', 'stock', 20, 5.56, 520, 0.02),
+    h('KLBN3', 'stock', 20, 3.57, 360, 0.01),
+    h('TRIS3', 'stock', 5, 8.16, 800),
+  ];
+
+  it('patrimônio, investido, variação, DY e yield on cost', () => {
+    const s = portfolioStats(carteira);
+    expect(s.value_cents).toBe(24596 + 11120 + 7140 + 4080);
+    expect(s.invested_cents).toBe(24700 + 10400 + 7200 + 4000);
+    expect(s.units).toBe(71);
+    expect(s.monthly_income_cents).toBe(260 + 40 + 20);
+    expect(s.gain_pct).toBeCloseTo((46936 / 46300 - 1) * 100);
+    expect(s.dy_pct).toBeCloseTo((320 / 46936) * 100);
+    expect(s.yoc_pct).toBeCloseTo((320 / 46300) * 100);
+  });
+
+  it('fatias por ativo, tipo, classe e renda; cor fixa por ativo', () => {
+    const a = breakdown(carteira, 'ativos');
+    expect(a.map((x) => x.key)).toEqual(['MXRF11', 'GRND3', 'KLBN3', 'TRIS3']); // maior primeiro
+    expect(a.find((x) => x.key === 'GRND3')!.slot).toBe(1); // ordem alfabética define a cor
+    expect(a.find((x) => x.key === 'TRIS3')!.slot).toBe(4);
+    expect(a.reduce((s, x) => s + x.pct, 0)).toBeCloseTo(100);
+    expect(breakdown(carteira, 'tipos').map((x) => [x.label, x.slot])).toEqual([['Fundos imobiliários', 1], ['Ações', 2]]);
+    expect(breakdown(carteira, 'classe').map((x) => x.label)).toEqual(['FII', 'Ação ON']);
+    const r = breakdown(carteira, 'renda');
+    expect(r.map((x) => x.key)).toEqual(['MXRF11', 'GRND3', 'KLBN3']); // TRIS3 não rende: fora
+  });
+
+  it('mais de 8 ativos: os menores viram "Outros"', () => {
+    const many = Array.from({ length: 10 }, (_, i) => h(`AAA${i}11`, 'fii', 1, 10 + i, null));
+    const s = breakdown(many, 'ativos');
+    expect(s).toHaveLength(8);
+    expect(s.at(-1)).toMatchObject({ key: 'outros', slot: 0 });
   });
 });

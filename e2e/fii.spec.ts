@@ -56,6 +56,23 @@ test('Renda: FII e ações, mês vigente, compras com data e lançamento de rece
   await expect(page.getByText('Caiu em 07/10/2026')).toBeVisible();
   await expect(page.getByText(/Cotação R\$ 59,85/)).toBeVisible();
 
+  // painel da carteira: patrimônio, indicadores e gráfico de composição
+  const panel = page.getByRole('region', { name: 'Minha carteira' });
+  await expect(panel.getByText('Patrimônio atual')).toBeVisible();
+  await expect(panel.getByText('Renda mensal estimada')).toBeVisible();
+  await expect(panel.getByRole('img', { name: /Composição da carteira: PETR4/ })).toBeVisible();
+  await expect(panel.getByText(/concentra .* da carteira/)).toBeVisible(); // PETR4 ≈ 50%
+  await panel.getByRole('button', { name: /^HSML11/ }).click();
+  await expect(panel.getByText('HSML11', { exact: true }).first()).toBeVisible();
+  await panel.getByRole('radio', { name: 'Tipos' }).click();
+  await expect(panel.getByRole('button', { name: /Fundos imobiliários/ })).toBeVisible();
+  await expect(panel.getByRole('button', { name: /^Ações/ })).toBeVisible();
+  await panel.getByRole('radio', { name: 'Ativos' }).click();
+  await panel.screenshot({ path: `e2e-screens/carteira-${test.info().project.name}-claro.png` });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await panel.screenshot({ path: `e2e-screens/carteira-${test.info().project.name}-escuro.png` });
+  await page.emulateMedia({ colorScheme: 'light' });
+
   // compra depois da data com: entra na quantidade, mas não no provento já pago
   const hsml = page.locator('div.overflow-hidden', { has: page.getByText('HSML11', { exact: true }) });
   await hsml.getByRole('button', { name: 'Mais detalhes' }).click();

@@ -344,3 +344,107 @@ export function incomeDescription(p: Pick<FiiPayment, 'ticker' | 'asset_type' | 
   if (isJcp(p.dist.kind)) return `JCP ${p.ticker}`;
   return `${p.asset_type === 'stock' ? 'Dividendo' : 'Rendimento'} ${p.ticker}`;
 }
+
+// ---------------------------------------------------------------- composição da carteira
+
+export interface Holding {
+  ticker: string;
+  type: AssetType;
+  quantity: number;
+  /** cotação atual (R$) */
+  price: number | null;
+  avgPriceCents: number | null;
+  /** renda mensal estimada por cota/ação (R$, líquida) */
+  perShare: number;
+}
+
+export interface PortfolioStats {
+  value_cents: number;
+  invested_cents: number;
+  /** variação sobre o investido (só ativos com preço médio e cotação) */
+  gain_pct: number | null;
+  units: number;
+  monthly_income_cents: number;
+  /** renda mensal ÷ patrimônio atual */
+  dy_pct: number | null;
+  /** renda mensal ÷ valor investido */
+  yoc_pct: number | null;
+}
+
+const holdingValue = (h: Holding) => Math.round(h.quantity * (h.price ?? (h.avgPriceCents ?? 0) / 100) * 100);
+const holdingIncome = (h: Holding) => Math.round(h.quantity * h.perShare * 100);
+
+export function portfolioStats(holdings: Holding[]): PortfolioStats {
+  const value = holdings.reduce((s, h) => s + holdingValue(h), 0);
+  const withCost = holdings.filter((h) => h.avgPriceCents && h.quantity > 0);
+  const invested = withCost.reduce((s, h) => s + h.quantity * (h.avgPriceCents ?? 0), 0);
+  const priced = withCost.filter((h) => h.price !== null);
+  const pricedInvested = priced.reduce((s, h) => s + h.quantity * (h.avgPriceCents ?? 0), 0);
+  const pricedValue = priced.reduce((s, h) => s + holdingValue(h), 0);
+  const income = holdings.reduce((s, h) => s + holdingIncome(h), 0);
+  const incomeWithCost = withCost.reduce((s, h) => s + holdingIncome(h), 0);
+  return {
+    value_cents: value,
+    invested_cents: invested,
+    gain_pct: pricedInvested ? (pricedValue / pricedInvested - 1) * 100 : null,
+    units: holdings.reduce((s, h) => s + h.quantity, 0),
+    monthly_income_cents: income,
+    dy_pct: value ? (income / value) * 100 : null,
+    yoc_pct: invested ? (incomeWithCost / invested) * 100 : null,
+  };
+}
+
+export type BreakdownBy = 'ativos' | 'tipos' | 'classe' | 'renda';
+
+export interface Slice {
+  key: string;
+  label: string;
+  cents: number;
+  pct: number;
+  /** posição fixa na paleta categórica (1–8); 0 = "Outros" (neutro) */
+  slot: number;
+}
+
+const MAX_SLICES = 8;
+
+/** Classe pelo final do código: FII, ação ON (3), PN (4–8) ou unit (11). */
+export function assetClass(h: Pick<Holding, 'ticker' | 'type'>): string {
+  if (h.type === 'fii') return 'FII';
+  const s = h.ticker.slice(4);
+  return s === '3' ? 'Ação ON' : s === '11' ? 'Unit' : 'Ação PN';
+}
+
+/**
+ * Fatias do gráfico. A cor segue a entidade (ordem alfabética fixa dos ativos),
+ * nunca o tamanho; com mais de 8 ativos, os menores viram "Outros".
+ */
+export function breakdown(holdings: Holding[], by: BreakdownBy): Slice[] {
+  const groups = new Map<string, number>();
+  const add = (k: string, v: number) => groups.set(k, (groups.get(k) ?? 0) + v);
+  for (const h of holdings) {
+    if (by === 'ativos') add(h.ticker, holdingValue(h));
+    else if (by === 'renda') add(h.ticker, holdingIncome(h));
+    else if (by === 'tipos') add(h.type === 'fii' ? 'Fundos imobiliários' : 'Ações', holdingValue(h));
+    else add(assetClass(h), holdingValue(h));
+  }
+  const fixedOrder =
+    by === 'tipos' ? ['Fundos imobiliários', 'Ações'] : by === 'classe' ? ['FII', 'Ação PN', 'Ação ON', 'Unit'] : [...new Set(holdings.map((h) => h.ticker))].sort();
+  const total = [...groups.values()].reduce((s, v) => s + v, 0);
+  let rows = [...groups.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  let other = 0;
+  if (rows.length > MAX_SLICES) {
+    other = rows.slice(MAX_SLICES - 1).reduce((s, [, v]) => s + v, 0);
+    rows = rows.slice(0, MAX_SLICES - 1);
+  }
+  // cor por entidade: posição na ordem fixa entre as que aparecem
+  const shown = fixedOrder.filter((k) => rows.some(([r]) => r === k));
+  const slices: Slice[] = rows.map(([key, cents]) => ({
+    key,
+    label: key,
+    cents,
+    pct: total ? (cents / total) * 100 : 0,
+    slot: shown.indexOf(key) + 1,
+  }));
+  if (other > 0) slices.push({ key: 'outros', label: 'Outros', cents: other, pct: (other / total) * 100, slot: 0 });
+  return slices;
+}
