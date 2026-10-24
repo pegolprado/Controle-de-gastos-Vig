@@ -111,7 +111,7 @@ export function PortfolioOverview({ holdings, names }: { holdings: Holding[]; na
                   <li key={s.key}>
                     <button
                       type="button"
-                      onClick={() => setActive(active === s.key ? null : s.key)}
+                      onClick={() => setActive(s.key)}
                       onMouseEnter={() => setActive(s.key)}
                       onMouseLeave={() => setActive(null)}
                       aria-pressed={active === s.key}
@@ -211,7 +211,7 @@ function Donut({
                 className="cursor-pointer transition-[opacity] duration-200"
                 onMouseEnter={() => onActive(s.key)}
                 onMouseLeave={() => onActive(null)}
-                onClick={() => onActive(on ? null : s.key)}
+                onClick={() => onActive(s.key)}
               >
                 <title>{`${s.label}: ${formatPercent(s.pct, 1)}`}</title>
               </path>

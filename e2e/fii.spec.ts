@@ -25,6 +25,7 @@ async function add(page: Page, ticker: string, qty: string, type: 'fii' | 'stock
 }
 
 test('Renda: FII e ações, mês vigente, compras com data e lançamento de receitas', async ({ page }) => {
+  test.slow(); // fluxo longo: no CI concorre com os outros testes
   const state = await setup(page);
   await expect(page.getByText('Nenhum ativo na carteira')).toBeVisible();
 

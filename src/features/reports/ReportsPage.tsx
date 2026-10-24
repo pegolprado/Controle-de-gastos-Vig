@@ -30,7 +30,7 @@ export default function ReportsPage() {
   const [params] = useSearchParams();
   const today = todayISO();
   const [from, setFrom] = useState(params.get('de') ?? addMonths(startOfMonth(today), -5));
-  const [to, setTo] = useState(startOfMonth(today));
+  const [to, setTo] = useState(params.get('ate') ?? startOfMonth(today));
   const [accountId, setAccountId] = useState('');
   const [cardId, setCardId] = useState('');
   const [userId, setUserId] = useState('');
