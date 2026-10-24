@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CalendarCheck, CalendarClock, Check, Plus } from 'lucide-react';
 import { useWorkspace, useWsId } from '@/app/WorkspaceProvider';
@@ -24,7 +25,11 @@ export default function BillsPage() {
   const { accountMap, cardMap } = useLookups();
   const quickAdd = useQuickAdd();
   const today = todayISO();
-  const [tab, setTab] = useState<Tab>('overdue');
+  // links do Painel: ?aba=receber | pagar (primeira aba de contas a pagar com itens) | vencidas…
+  const [params] = useSearchParams();
+  const aba = params.get('aba');
+  const fromLink: Record<string, Tab> = { receber: 'income', pagar: 'overdue', vencidas: 'overdue', hoje: 'today', '7dias': 'week', '30dias': 'month', pagas: 'paid' };
+  const [tab, setTab] = useState<Tab>(fromLink[aba ?? ''] ?? 'overdue');
   const [selected, setSelected] = useState<Transaction | null>(null);
   const [settling, setSettling] = useState<Transaction | null>(null);
 
@@ -59,6 +64,13 @@ export default function BillsPage() {
     { id: 'income', label: 'A receber', count: buckets.income.length, total: sum(buckets.income) },
     { id: 'paid', label: 'Pagas', count: paid.data?.length ?? 0 },
   ];
+  // "A pagar": abre na primeira aba que tem contas (vencidas → hoje → 7 → 30 dias)
+  useEffect(() => {
+    if (aba !== 'pagar' || !open.data) return;
+    const first = (['overdue', 'today', 'week', 'month'] as const).find((t) => tabs.find((x) => x.id === t)!.count > 0);
+    if (first) setTab(first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, open.data]);
   const current: Transaction[] = tab === 'paid' ? paid.data ?? [] : buckets[tab];
 
   return (

@@ -57,6 +57,14 @@ export default function DashboardPage() {
   const [selected, setSelected] = useState<Transaction | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const filters = { accountId: accountId || null, cardId: cardId || null, categoryId: categoryId || null };
+  // lançamentos do mês escolhido, com os mesmos filtros do Painel
+  const txLink = (kind: 'income' | 'expense') => {
+    const q = new URLSearchParams({ tipo: kind, periodo: 'custom', de: month, ate: endOfMonth(month) });
+    if (accountId) q.set('conta', accountId);
+    if (cardId) q.set('cartao', cardId);
+    if (categoryId) q.set('categoria', categoryId);
+    return `/lancamentos?${q}`;
+  };
   const prevMonth = addMonths(month, -1);
   const today = todayISO();
 
@@ -171,14 +179,18 @@ export default function DashboardPage() {
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:28px_28px] [mask-image:linear-gradient(to_bottom,black,transparent)]" aria-hidden />
         <div className="relative grid gap-6 lg:grid-cols-[1.3fr_1fr]">
           <div>
-            <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-white/50">Saldo consolidado hoje</p>
-            {balances.isLoading ? (
-              <Skeleton className="mt-2 h-12 w-64 bg-white/10" />
-            ) : (
-              <p className="money font-num mt-1 text-[40px] font-semibold leading-none sm:text-[52px]">
-                {formatBRL(consolidated.current)}
+            <Link to="/contas" className="group inline-block rounded-xl focus-visible:outline-2 focus-visible:outline-white/60" aria-label="Saldo consolidado hoje: ver contas">
+              <p className="flex items-center gap-1 text-[12px] font-semibold uppercase tracking-[0.18em] text-white/50">
+                Saldo consolidado hoje <ChevronRight className="size-3.5 opacity-60 transition group-hover:translate-x-0.5 group-hover:opacity-100" aria-hidden />
               </p>
-            )}
+              {balances.isLoading ? (
+                <Skeleton className="mt-2 h-12 w-64 bg-white/10" />
+              ) : (
+                <p className="money font-num mt-1 text-[40px] font-semibold leading-none sm:text-[52px]">
+                  {formatBRL(consolidated.current)}
+                </p>
+              )}
+            </Link>
             <p className="mt-3 text-sm text-white/60">
               Em contas e dinheiro. Previsto após compromissos em aberto:{' '}
               <span className="money font-semibold text-white">{formatBRL(consolidated.projected)}</span>
@@ -193,10 +205,10 @@ export default function DashboardPage() {
             )}
           </div>
           <dl className="grid grid-cols-2 gap-3 self-end">
-            <HeroStat label="A receber" cents={consolidated.pendingIn} tone="text-emerald-300" />
-            <HeroStat label="A pagar (contas)" cents={consolidated.pendingOut} tone="text-rose-300" />
-            <HeroStat label="Faturas em aberto" cents={invoiceDebt} tone="text-rose-300" />
-            <HeroStat label="Contas ativas" text={String(accounts.filter((a) => !a.archived).length)} />
+            <HeroStat label="A receber" cents={consolidated.pendingIn} tone="text-emerald-300" to="/compromissos?aba=receber" />
+            <HeroStat label="A pagar (contas)" cents={consolidated.pendingOut} tone="text-rose-300" to="/compromissos?aba=pagar" />
+            <HeroStat label="Faturas em aberto" cents={invoiceDebt} tone="text-rose-300" to="/cartoes" />
+            <HeroStat label="Contas ativas" text={String(accounts.filter((a) => !a.archived).length)} to="/contas" />
           </dl>
         </div>
       </section>
@@ -205,9 +217,10 @@ export default function DashboardPage() {
 
       {/* Indicadores do mês */}
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label={`Resumo de ${monthLabel(month)}`}>
-        <StatCard label="Receitas do mês" loading={series.isLoading} cents={income} tone="income" footer={<Delta current={income} previous={prev?.income_cents ?? 0} />} />
-        <StatCard label="Despesas do mês" loading={series.isLoading} cents={expense} tone="expense" footer={<Delta current={expense} previous={prev?.expense_cents ?? 0} inverse />} />
+        <StatCard label="Receitas do mês" to={txLink('income')} loading={series.isLoading} cents={income} tone="income" footer={<Delta current={income} previous={prev?.income_cents ?? 0} />} />
+        <StatCard label="Despesas do mês" to={txLink('expense')} loading={series.isLoading} cents={expense} tone="expense" footer={<Delta current={expense} previous={prev?.expense_cents ?? 0} inverse />} />
         <StatCard
+          to={`/relatorios?de=${addMonths(month, -5)}&ate=${month}`}
           label="Resultado"
           loading={series.isLoading}
           cents={result}
@@ -215,14 +228,15 @@ export default function DashboardPage() {
           signed
           footer={<span className="text-[13px] text-subtle">{income > 0 ? `${formatPercent((result / income) * 100)} da renda ${result >= 0 ? 'poupada' : 'excedida'}` : 'receitas menos despesas'}</span>}
         />
-        <Card className="p-4 sm:p-5">
-          <p className="text-[13px] font-semibold text-muted">Orçamento utilizado</p>
+        <Card className="relative p-4 transition hover:border-line-strong sm:p-5">
+          <Link to="/orcamentos" className="absolute inset-0 z-0 rounded-[inherit]" aria-label="Orçamento utilizado: ver orçamentos" />
+          <p className="flex items-center justify-between text-[13px] font-semibold text-muted">Orçamento utilizado <ChevronRight className="size-4 text-subtle" aria-hidden /></p>
           {budgets.isLoading ? (
             <Skeleton className="mt-2 h-8 w-24" />
           ) : budgetPct === null ? (
             <>
               <p className="font-num mt-1 text-2xl font-semibold text-subtle">—</p>
-              <Link to="/orcamentos" className="text-[13px] font-semibold text-brand">Definir orçamentos</Link>
+              <span className="text-[13px] font-semibold text-brand">Definir orçamentos</span>
             </>
           ) : (
             <>
@@ -444,10 +458,14 @@ function HeroAction({ label, icon, onClick }: { label: string; icon: React.React
   );
 }
 
-function HeroStat({ label, cents, text, tone }: { label: string; cents?: number; text?: string; tone?: string }) {
+function HeroStat({ label, cents, text, tone, to }: { label: string; cents?: number; text?: string; tone?: string; to: string }) {
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.04] px-4 py-3">
-      <dt className="text-[12px] text-white/50">{label}</dt>
+    <div className="group relative rounded-2xl border border-white/[0.07] bg-white/[0.04] px-4 py-3 transition hover:border-white/20 hover:bg-white/[0.08] has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-white/60">
+      <Link to={to} className="absolute inset-0 rounded-[inherit] outline-none" aria-label={`${label}: ver detalhes`} />
+      <dt className="flex items-center justify-between gap-1 text-[12px] text-white/50">
+        {label}
+        <ChevronRight className="size-3.5 shrink-0 opacity-50 transition group-hover:translate-x-0.5 group-hover:opacity-100" aria-hidden />
+      </dt>
       <dd className={cn('money font-num mt-0.5 text-lg font-semibold', tone)}>
         {text ?? formatBRL(cents ?? 0)}
       </dd>
@@ -455,10 +473,14 @@ function HeroStat({ label, cents, text, tone }: { label: string; cents?: number;
   );
 }
 
-function StatCard({ label, cents, tone, footer, loading, signed }: { label: string; cents: number; tone: 'income' | 'expense'; footer?: React.ReactNode; loading?: boolean; signed?: boolean }) {
+function StatCard({ label, cents, tone, footer, loading, signed, to }: { label: string; cents: number; tone: 'income' | 'expense'; footer?: React.ReactNode; loading?: boolean; signed?: boolean; to: string }) {
   return (
-    <Card className="p-4 sm:p-5">
-      <p className="text-[13px] font-semibold text-muted">{label}</p>
+    <Card className="group relative p-4 transition hover:border-line-strong sm:p-5">
+      <Link to={to} className="absolute inset-0 rounded-[inherit]" aria-label={`${label}: ver detalhes`} />
+      <p className="flex items-center justify-between text-[13px] font-semibold text-muted">
+        {label}
+        <ChevronRight className="size-4 text-subtle transition group-hover:translate-x-0.5" aria-hidden />
+      </p>
       {loading ? <Skeleton className="mt-2 h-8 w-28" /> : <Money cents={cents} tone={tone} signed={signed} className="font-num mt-1 block text-xl font-semibold sm:text-2xl" />}
       <div className="mt-1.5">{footer}</div>
     </Card>
