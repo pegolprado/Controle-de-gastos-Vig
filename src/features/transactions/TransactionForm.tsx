@@ -23,6 +23,8 @@ import { cn } from '@/lib/cn';
 import type { Category, PaymentMethod, RecurrenceFreq, Transaction, TxKind, TxStatus } from '@/lib/types';
 import { createInstallments, createTransaction, listCategoryHints, updateTransaction, uploadReceipt, type TxInput } from '@/services/transactions';
 import { descriptionKey } from '@/lib/statement';
+import { CATEGORY_PARENT, parseQuickEntry, type QuickEntry } from '@/domain/quickEntry';
+import { QuickEntryBar, type ReceiptResult } from './QuickEntryBar';
 import { listInvoices } from '@/services/cards';
 import { createRecurrence, settleOccurrence, updateRecurrence } from '@/services/planning';
 
@@ -165,19 +167,21 @@ export function TransactionForm({ initialKind = 'expense', existing, duplicateOf
     enabled: !editing,
     staleTime: 10 * 60_000,
   });
+  const historyCategory = (description: string, kind: TxKind) => {
+    const typed = descriptionKey(description);
+    if (typed.length < 3 || !hints.data) return '';
+    const valid = (id: string | null) => !!id && categories.some((c) => c.id === id && c.kind === kind && !c.archived);
+    const same = hints.data.filter((h) => h.kind === kind && valid(h.category_id));
+    const exact = same.find((h) => descriptionKey(h.description) === typed);
+    const partial = typed.length >= 4 ? same.find((h) => { const k = descriptionKey(h.description); return k.startsWith(typed) || (k.length >= 4 && typed.startsWith(k)); }) : undefined;
+    return (exact ?? partial)?.category_id ?? '';
+  };
   useEffect(() => {
     if (catTouched || (f.kind !== 'income' && f.kind !== 'expense') || !hints.data) return;
-    const typed = descriptionKey(f.description);
-    let found = '';
-    if (typed.length >= 3) {
-      const valid = (id: string | null) => !!id && categories.some((c) => c.id === id && c.kind === f.kind && !c.archived);
-      const same = hints.data.filter((h) => h.kind === f.kind && valid(h.category_id));
-      const exact = same.find((h) => descriptionKey(h.description) === typed);
-      const partial = typed.length >= 4 ? same.find((h) => { const k = descriptionKey(h.description); return k.startsWith(typed) || (k.length >= 4 && typed.startsWith(k)); }) : undefined;
-      found = (exact ?? partial)?.category_id ?? '';
-    }
+    const found = historyCategory(f.description, f.kind);
     setSuggestedCat(found);
     setF((s) => (s.category_id === found ? s : { ...s, category_id: found }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f.description, f.kind, hints.data, catTouched, categories]);
 
   // faturas com saldo em aberto (pagamento de fatura)
@@ -342,6 +346,45 @@ export function TransactionForm({ initialKind = 'expense', existing, duplicateOf
     },
   });
 
+  // lançamento rápido (texto, voz ou comprovante) → preenche o formulário
+  const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  function applyQuick(q: QuickEntry) {
+    const kind = q.kind;
+    const fromHistory = historyCategory(q.description, kind);
+    const named = (name: string | undefined) => (name ? categories.find((c) => c.kind === kind && !c.archived && norm(c.name) === norm(name))?.id ?? '' : '');
+    const byName = q.categoryName ? named(q.categoryName) || named(CATEGORY_PARENT[q.categoryName]) : '';
+    const category = fromHistory || byName;
+    const card = q.sourceName ? activeCards.find((c) => norm(c.name) === norm(q.sourceName!)) : undefined;
+    const account = q.sourceName ? activeAccounts.find((a) => norm(a.name) === norm(q.sourceName!)) : undefined;
+    const useCard = kind === 'expense' && activeCards.length > 0 && (Boolean(card) || q.credit || q.installments > 1);
+    setF((s) => ({
+      ...s,
+      kind,
+      amount: q.amount_cents ?? s.amount,
+      description: q.description || s.description,
+      occurred_on: q.occurred_on,
+      installments: kind === 'expense' ? q.installments : 1,
+      source: useCard ? 'card' : 'account',
+      card_id: card?.id ?? s.card_id,
+      account_id: account?.id ?? s.account_id,
+      payment_method: q.payment_method ?? s.payment_method,
+      category_id: category || (s.kind === kind ? s.category_id : ''),
+      repeat: kind === 'expense' || kind === 'income' ? s.repeat : false,
+    }));
+    if (category) {
+      setCatTouched(true);
+      setSuggestedCat(category);
+    }
+    setErrors({});
+    if (q.amount_cents === null) toast.info('Faltou o valor: digite no campo Valor.');
+  }
+  function applyReceipt(r: ReceiptResult) {
+    const merchant = r.merchant ? r.merchant.toLowerCase().replace(/\b\p{L}/gu, (c) => c.toUpperCase()) : '';
+    const q = parseQuickEntry(merchant);
+    applyQuick({ ...q, kind: 'expense', amount_cents: r.amount_cents, description: merchant || q.description || 'Compra', occurred_on: r.occurred_on ?? f.occurred_on, installments: 1 });
+    setFile(r.file);
+  }
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (mutation.isPending) return; // trava contra cliques repetidos
@@ -380,6 +423,9 @@ export function TransactionForm({ initialKind = 'expense', existing, duplicateOf
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-4" aria-label="Formulário de lançamento">
+      {!editing && !duplicateOf && !preset && (
+        <QuickEntryBar onText={(t) => applyQuick(parseQuickEntry(t, [...activeCards.map((c) => c.name), ...activeAccounts.map((a) => a.name)]))} onReceipt={applyReceipt} />
+      )}
       {!editing && (
         <Segmented
           label="Tipo de lançamento"
@@ -403,7 +449,7 @@ export function TransactionForm({ initialKind = 'expense', existing, duplicateOf
             onChange={(v) => set('amount', v)}
             hero
             tone={f.kind === 'income' ? 'income' : f.kind === 'expense' ? 'expense' : 'neutral'}
-            autoFocus={!editing}
+            autoFocus={!editing && Boolean(duplicateOf || preset)}
           />
         )}
       </Field>
