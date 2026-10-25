@@ -99,6 +99,7 @@ export default defineConfig({
           { src: `${base}pwa-maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
         shortcuts: [
+          { name: 'Falar um gasto', url: `${base}?voz=1`, icons: [{ src: `${base}pwa-192.png`, sizes: '192x192' }] },
           { name: 'Nova despesa', url: `${base}?novo=expense`, icons: [{ src: `${base}pwa-192.png`, sizes: '192x192' }] },
           { name: 'Lançamentos', url: `${base}lancamentos`, icons: [{ src: `${base}pwa-192.png`, sizes: '192x192' }] },
         ],

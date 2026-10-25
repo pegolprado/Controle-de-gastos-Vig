@@ -175,7 +175,10 @@ export function parseQuickEntry(input: string, sources: string[] = [], today: st
 
   const catHit = CATEGORY_WORDS.find(([re]) => re.test(text));
   const words = text.split(/\s+/).filter((w) => w && !STOP.has(w) && !/^\d+$/.test(w));
-  const original = input.split(/\s+/).filter((w) => words.includes(strip(w).replace(/[!?;,.]/g, '')));
+  const tokens = input.split(/\s+/);
+  const kept = tokens.map((w) => words.includes(strip(w).replace(/[!?;,.]/g, '')));
+  // "pão e leite": o "e" entre duas palavras mantidas fica
+  const original = tokens.filter((w, i) => kept[i] || (strip(w) === 'e' && kept[i - 1] && kept[i + 1]));
   const description = original.join(' ').replace(/[,.]$/, '').trim();
 
   return {
@@ -227,4 +230,37 @@ export function parseReceiptText(text: string, today: string = todayISO()): { am
       ?.replace(/\s{2,}/g, ' ')
       .slice(0, 60) ?? null;
   return { amount_cents: amount, occurred_on, merchant };
+}
+
+/**
+ * Vários lançamentos numa frase: "gastei 100 reais com gasolina e 35 com mercado".
+ * Divide em "e", vírgula, "mais", "também" — só onde o pedaço seguinte tem valor —
+ * e cada pedaço herda o tipo (gasto/receita) e a data ditos uma vez só.
+ */
+export function parseQuickEntries(input: string, sources: string[] = [], today: string = todayISO()): QuickEntry[] {
+  const parts = input
+    .split(/\s*(?:,\s+|;|\.\s|\s+e\s+|\s+mais\s+|\s+tamb[eé]m\s+|\s+depois\s+)\s*/i)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const hasAmount = (p: string) => parseQuickEntry(p, [], today).amount_cents !== null;
+  // junta pedaços sem valor ao anterior ("pão e leite 12" fica inteiro)
+  const chunks: string[] = [];
+  for (const p of parts) {
+    if (chunks.length && (!hasAmount(p) || !hasAmount(chunks[chunks.length - 1]!))) chunks[chunks.length - 1] += ` e ${p}`;
+    else chunks.push(p);
+  }
+  const whole = parseQuickEntry(input, sources, today);
+  const saidDate = whole.occurred_on !== today;
+  const firstKind = parseQuickEntry(chunks[0] ?? input, [], today).kind;
+  return chunks.map((c) => {
+    const q = parseQuickEntry(c, sources, today);
+    const ownVerb = INCOME.test(` ${strip(c)} `) || EXPENSE_VERBS.test(` ${strip(c)} `);
+    return {
+      ...q,
+      kind: ownVerb ? q.kind : firstKind,
+      occurred_on: q.occurred_on !== today ? q.occurred_on : saidDate ? whole.occurred_on : today,
+      sourceName: q.sourceName ?? whole.sourceName,
+      credit: q.credit || (whole.credit && chunks.length > 1 && !q.payment_method),
+    };
+  });
 }

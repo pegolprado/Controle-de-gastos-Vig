@@ -1,9 +1,10 @@
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Eye, EyeOff, LogOut, Menu, Plus, WifiOff, X } from 'lucide-react';
+import { Eye, EyeOff, LogOut, Menu, Mic, Plus, WifiOff, X } from 'lucide-react';
 import { useAuth } from '@/app/AuthProvider';
 import { useWorkspace } from '@/app/WorkspaceProvider';
 import { useQuickAdd } from '@/features/transactions/QuickAdd';
+import { useVoiceCapture } from '@/features/transactions/VoiceCapture';
 import { NotificationsBell } from '@/features/notifications/NotificationsBell';
 import { useOnline } from '@/hooks/useOnline';
 import { cn } from '@/lib/cn';
@@ -123,6 +124,7 @@ function PageFallback() {
 export function AppShell({ banner }: { banner?: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const quickAdd = useQuickAdd();
+  const voice = useVoiceCapture();
   const { canContribute, hideValues, toggleHideValues, workspace } = useWorkspace();
   const online = useOnline();
   const location = useLocation();
@@ -168,6 +170,17 @@ export function AppShell({ banner }: { banner?: ReactNode }) {
               <span className="flex items-center gap-1.5 rounded-full bg-warning/12 px-2.5 py-1 text-xs font-semibold text-warning" role="status">
                 <WifiOff className="size-3.5" aria-hidden /> Offline
               </span>
+            )}
+            {canContribute && (
+              <button
+                type="button"
+                onClick={voice}
+                aria-label="Falar um gasto"
+                title="Falar um gasto"
+                className="grid size-10 place-items-center rounded-xl bg-brand/12 text-brand transition hover:bg-brand/20 active:scale-95"
+              >
+                <Mic className="size-5" aria-hidden />
+              </button>
             )}
             <IconButton label={hideValues ? 'Mostrar valores' : 'Ocultar valores'} onClick={toggleHideValues}>
               {hideValues ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}

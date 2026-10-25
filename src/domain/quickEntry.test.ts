@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseQuickEntry, parseReceiptText } from './quickEntry';
+import { parseQuickEntries, parseQuickEntry, parseReceiptText } from './quickEntry';
 
 const T = '2026-10-25';
 
@@ -33,5 +33,23 @@ describe('comprovante', () => {
   it('comprovante de pix', () => {
     const text = `Comprovante de transferência\nPix enviado\nValor\nR$ 150,00\nData 22/10/2026\nPara\nJoão da Silva`;
     expect(parseReceiptText(text, T)).toMatchObject({ amount_cents: 15_000, occurred_on: '2026-10-22' });
+  });
+});
+
+describe('vários lançamentos numa frase (voz)', () => {
+  it('divide e herda tipo e data', () => {
+    const r = parseQuickEntries('Gastei 100 reais com gasolina e 35 com mercado ontem', [], T);
+    expect(r).toHaveLength(2);
+    expect(r[0]).toMatchObject({ kind: 'expense', amount_cents: 10_000, description: 'Gasolina', categoryName: 'Combustível', occurred_on: '2026-10-24' });
+    expect(r[1]).toMatchObject({ kind: 'expense', amount_cents: 3500, description: 'Mercado', categoryName: 'Mercado', occurred_on: '2026-10-24' });
+  });
+  it('não quebra descrição com "e" sem valor', () => {
+    const r = parseQuickEntries('paguei 12 reais pão e leite', [], T);
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({ amount_cents: 1200, description: 'Pão e leite' });
+  });
+  it('vírgulas, "mais" e receita', () => {
+    expect(parseQuickEntries('uber 18,90, ifood 45 mais farmácia 30', [], T).map((q) => q.amount_cents)).toEqual([1890, 4500, 3000]);
+    expect(parseQuickEntries('recebi 3 mil de salário', [], T)[0]).toMatchObject({ kind: 'income', amount_cents: 300_000 });
   });
 });
