@@ -81,11 +81,11 @@ export async function listGoals(ws: string): Promise<Goal[]> {
   return unwrapList(await supabase.from('goal_progress').select('*').eq('workspace_id', ws).order('archived').order('created_at'));
 }
 
-export async function createGoal(ws: string, p: { name: string; target_cents: number; deadline: string | null; color: string }) {
+export async function createGoal(ws: string, p: { name: string; target_cents: number; deadline: string | null; color: string; icon?: string }) {
   return unwrap(await supabase.from('goals').insert({ ...p, workspace_id: ws }).select().single());
 }
 
-export async function updateGoal(id: string, p: Partial<{ name: string; target_cents: number; deadline: string | null; color: string; archived: boolean }>) {
+export async function updateGoal(id: string, p: Partial<{ name: string; target_cents: number; deadline: string | null; color: string; icon: string; archived: boolean }>) {
   return unwrap(await supabase.from('goals').update(p).eq('id', id).select().single());
 }
 
