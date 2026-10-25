@@ -332,3 +332,27 @@ export async function listPaidExpensesSince(ws: string, since: string): Promise<
       .limit(2000),
   );
 }
+
+/** Todas as despesas desde uma data (paginado: o servidor devolve no máximo 1000 por vez). */
+export type ExpenseLite = Pick<Transaction, 'id' | 'description' | 'amount_cents' | 'occurred_on' | 'kind' | 'status' | 'recurrence_id' | 'installment_group_id' | 'category_id' | 'account_id' | 'card_id' | 'payment_method'>;
+
+export async function listExpensesSince(ws: string, since: string): Promise<ExpenseLite[]> {
+  const out: ExpenseLite[] = [];
+  for (let from = 0; from < 20_000; from += 1000) {
+    const page = unwrapList<ExpenseLite>(
+      await supabase
+        .from('transactions')
+        .select('id, description, amount_cents, occurred_on, kind, status, recurrence_id, installment_group_id, category_id, account_id, card_id, payment_method')
+        .eq('workspace_id', ws)
+        .eq('kind', 'expense')
+        .neq('status', 'cancelled')
+        .gte('occurred_on', since)
+        .order('occurred_on', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + 999),
+    );
+    out.push(...page);
+    if (page.length < 1000) break;
+  }
+  return out;
+}

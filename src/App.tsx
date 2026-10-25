@@ -22,6 +22,7 @@ const Recurrences = lazy(() => import('@/features/recurrences/RecurrencesPage'))
 const Reports = lazy(() => import('@/features/reports/ReportsPage'));
 const Fii = lazy(() => import('@/features/fii/FiiPage'));
 const Forecast = lazy(() => import('@/features/forecast/ForecastPage'));
+const Savings = lazy(() => import('@/features/savings/SavingsPage'));
 const Workspace = lazy(() => import('@/features/workspace/WorkspacePage'));
 const Settings = lazy(() => import('@/features/settings/SettingsPage'));
 const Categories = lazy(() => import('@/features/settings/CategoriesPage'));
@@ -79,6 +80,7 @@ const router = createBrowserRouter(
           { path: 'cartoes/:id', element: <CardDetail /> },
           { path: 'compromissos', element: <Bills /> },
           { path: 'previsao', element: <Forecast /> },
+          { path: 'economia', element: <Savings /> },
           { path: 'orcamentos', element: <Budgets /> },
           { path: 'metas', element: <Goals /> },
           { path: 'recorrencias', element: <Recurrences /> },
