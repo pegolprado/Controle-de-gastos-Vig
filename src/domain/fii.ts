@@ -448,3 +448,54 @@ export function breakdown(holdings: Holding[], by: BreakdownBy): Slice[] {
   if (other > 0) slices.push({ key: 'outros', label: 'Outros', cents: other, pct: (other / total) * 100, slot: 0 });
   return slices;
 }
+
+// ---------------------------------------------------------------- número mágico e bola de neve
+
+/**
+ * Número mágico: quantas cotas/ações fazem a renda de um mês comprar mais uma sozinha.
+ * Null quando falta cotação ou o ativo não tem renda estimada.
+ */
+export function magicNumber(price: number | null, perShare: number): number | null {
+  if (!price || perShare <= 0) return null;
+  return Math.ceil(price / perShare);
+}
+
+export interface SnowballPoint {
+  month: number;
+  value_cents: number;
+  income_cents: number;
+  /** quanto saiu do bolso até aqui (patrimônio inicial + aportes) */
+  contributed_cents: number;
+}
+
+/**
+ * Efeito bola de neve: reinveste toda a renda e aporta todo mês, mantendo o rendimento
+ * mensal de hoje (sem contar valorização das cotas nem inflação).
+ * Devolve um ponto por marco pedido e o mês em que a renda bate a meta (se bater em até 50 anos).
+ */
+export function snowball(opts: {
+  value_cents: number;
+  income_cents: number;
+  contribution_cents: number;
+  goal_cents?: number;
+  milestones?: number[];
+}): { points: SnowballPoint[]; goal_month: number | null } {
+  const { value_cents, income_cents, contribution_cents, goal_cents = 0 } = opts;
+  const milestones = opts.milestones ?? [12, 60, 120, 240];
+  const rate = value_cents > 0 ? income_cents / value_cents : 0;
+  const last = Math.max(...milestones, goal_cents ? 600 : 0);
+  let value = value_cents;
+  let income = income_cents;
+  let contributed = value_cents;
+  let goal: number | null = goal_cents && income >= goal_cents ? 0 : null;
+  const points: SnowballPoint[] = [];
+  for (let m = 1; m <= last; m++) {
+    value += income + contribution_cents;
+    contributed += contribution_cents;
+    income = Math.round(value * rate);
+    if (goal === null && goal_cents && income >= goal_cents) goal = m;
+    if (milestones.includes(m)) points.push({ month: m, value_cents: Math.round(value), income_cents: income, contributed_cents: contributed });
+    if (m >= Math.max(...milestones) && (goal !== null || !goal_cents)) break;
+  }
+  return { points, goal_month: goal };
+}

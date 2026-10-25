@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { breakdown, portfolioStats, featuredPayment, goalPlan, irReport, monthlyPerShare, normalizeStockTicker, qtyAt, stockIsinMatches, undatedFor, monthStatus, monthView, nextAndLast, normalizeTicker, payoutCents, paymentsFor, payStatus, projectNext, summarize, yieldOnCost } from './fii';
+import { breakdown, magicNumber, snowball, portfolioStats, featuredPayment, goalPlan, irReport, monthlyPerShare, normalizeStockTicker, qtyAt, stockIsinMatches, undatedFor, monthStatus, monthView, nextAndLast, normalizeTicker, payoutCents, paymentsFor, payStatus, projectNext, summarize, yieldOnCost } from './fii';
 import type { FiiDistribution, FiiPosition, FiiTrade, StockDistribution } from '@/lib/types';
 
 const pos = (ticker: string, quantity: number, asset_type: 'fii' | 'stock' = 'fii'): FiiPosition => ({ id: ticker, workspace_id: 'w', ticker, asset_type, quantity, avg_price_cents: null, created_at: '' });
@@ -267,5 +267,26 @@ describe('composição da carteira', () => {
     const s = breakdown(many, 'ativos');
     expect(s).toHaveLength(8);
     expect(s.at(-1)).toMatchObject({ key: 'outros', slot: 0 });
+  });
+});
+
+describe('número mágico e bola de neve', () => {
+  it('número mágico: renda de um mês compra mais uma cota', () => {
+    expect(magicNumber(100, 0.8)).toBe(125);
+    expect(magicNumber(100.5, 1)).toBe(101);
+    expect(magicNumber(null, 1)).toBeNull();
+    expect(magicNumber(100, 0)).toBeNull();
+  });
+
+  it('bola de neve reinveste a renda e soma os aportes', () => {
+    // R$ 10.000 rendendo 1% ao mês, sem aporte: 12 meses → 10.000 × 1,01^12
+    const r = snowball({ value_cents: 1_000_000, income_cents: 10_000, contribution_cents: 0, milestones: [12] });
+    expect(r.points[0]!.value_cents).toBeCloseTo(1_126_825, -2);
+    expect(r.points[0]!.contributed_cents).toBe(1_000_000);
+    const a = snowball({ value_cents: 1_000_000, income_cents: 10_000, contribution_cents: 50_000, goal_cents: 20_000, milestones: [12] });
+    expect(a.points[0]!.contributed_cents).toBe(1_600_000);
+    expect(a.goal_month).toBeGreaterThan(12);
+    expect(a.goal_month).toBeLessThan(60);
+    expect(snowball({ value_cents: 0, income_cents: 0, contribution_cents: 0, goal_cents: 1 }).goal_month).toBeNull();
   });
 });

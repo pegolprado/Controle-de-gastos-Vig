@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { CalendarPlus, ClipboardCopy, Download, Target } from 'lucide-react';
+import { CalendarPlus, ClipboardCopy, Download, Snowflake, Target } from 'lucide-react';
 import { useWsId } from '@/app/WorkspaceProvider';
 import { useLookups, wsKey } from '@/hooks/useFinance';
 import { Button } from '@/components/ui/Button';
@@ -15,7 +15,7 @@ import { formatBRL, formatPercent } from '@/lib/money';
 import { errorMessage } from '@/lib/errors';
 import { invalidateFinance, queryClient } from '@/lib/queryClient';
 import type { RendaSettings } from '@/lib/types';
-import { goalPlan, incomeDescription, IR_GROUP_LABEL, irReport, monthStatus, type FiiPayment, type IrGroup } from '@/domain/fii';
+import { goalPlan, incomeDescription, snowball, IR_GROUP_LABEL, irReport, monthStatus, type FiiPayment, type IrGroup } from '@/domain/fii';
 import { runAutopilot, saveRendaSettings } from '@/services/fii';
 import { PushToggle } from '@/pwa/PushToggle';
 import { fmtRate, unitLabel } from './shared';
@@ -172,6 +172,7 @@ export function GoalTab({
   const saved = settings?.income_goal_cents ?? 0;
   const plan = useMemo(() => goalPlan(saved, items), [saved, items]);
   const typeOf = new Map(items.map((i) => [i.ticker, i.type]));
+  const valueCents = Math.round(items.reduce((s, i) => s + i.quantity * (i.price ?? 0) * 100, 0));
 
   async function saveGoal() {
     setSaving(true);
@@ -225,6 +226,8 @@ export function GoalTab({
           </div>
         )}
       </Card>
+
+      {!loading && <Snowball valueCents={valueCents} incomeCents={plan.current_cents} goalCents={saved} />}
 
       {saved > 0 && plan.missing_cents > 0 && plan.rows.length > 0 && (
         <Card>
@@ -363,5 +366,76 @@ export function IrTab({
         </p>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------- bola de neve
+
+const CONTRIB_KEY = 'fmv.renda.aporte';
+const yearsLabel = (m: number) => {
+  const y = Math.floor(m / 12);
+  const r = m % 12;
+  return [y && `${y} ${y === 1 ? 'ano' : 'anos'}`, r && `${r} ${r === 1 ? 'mês' : 'meses'}`].filter(Boolean).join(' e ') || 'já';
+};
+
+/** Simulador: reinvestindo a renda e aportando todo mês, quanto a carteira passa a render. */
+function Snowball({ valueCents, incomeCents, goalCents }: { valueCents: number; incomeCents: number; goalCents: number }) {
+  const [contribution, setContribution] = useState(() => {
+    try {
+      return Number(localStorage.getItem(CONTRIB_KEY)) || 50_000;
+    } catch {
+      return 50_000;
+    }
+  });
+  const sim = useMemo(
+    () => snowball({ value_cents: valueCents, income_cents: incomeCents, contribution_cents: contribution, goal_cents: goalCents }),
+    [valueCents, incomeCents, contribution, goalCents],
+  );
+  if (valueCents <= 0 || incomeCents <= 0) return null;
+  const change = (v: number) => {
+    setContribution(v);
+    try {
+      localStorage.setItem(CONTRIB_KEY, String(v));
+    } catch {
+      /* ignore */
+    }
+  };
+  return (
+    <Card className="p-5" role="region" aria-label="Bola de neve">
+      <div className="flex items-start gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-info/12 text-info">
+          <Snowflake className="size-5" aria-hidden />
+        </span>
+        <div>
+          <h2 className="text-[15px] font-semibold">Bola de neve</h2>
+          <p className="text-[13px] text-subtle">Reinvestindo todos os proventos e aportando todo mês, quanto a carteira passa a render.</p>
+        </div>
+      </div>
+      <Field label="Aporte por mês" className="mt-4 max-w-[220px]">
+        {(id) => <MoneyInput id={id} value={contribution} onChange={change} />}
+      </Field>
+      {goalCents > incomeCents && (
+        <p className="mt-3 rounded-xl bg-positive/10 px-3 py-2.5 text-[14px]">
+          {sim.goal_month !== null ? (
+            <>Meta de <Money cents={goalCents} />/mês em <strong className="text-positive">{yearsLabel(sim.goal_month)}</strong>.</>
+          ) : (
+            <>Com esse aporte, a meta passa de 50 anos. Tente aumentar o aporte.</>
+          )}
+        </p>
+      )}
+      <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Projeção">
+        {sim.points.map((p) => (
+          <li key={p.month} className="rounded-xl border border-line px-3 py-2.5">
+            <p className="text-[12px] font-semibold text-subtle">Em {yearsLabel(p.month)}</p>
+            <p className="font-num text-[17px] font-semibold text-positive"><Money cents={p.income_cents} /><span className="text-[12px] font-normal text-subtle">/mês</span></p>
+            <p className="text-[12px] text-subtle">patrimônio <Money cents={p.value_cents} /></p>
+            <p className="text-[12px] text-subtle">do seu bolso <Money cents={p.contributed_cents} /></p>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-[12px] text-subtle">
+        Mantém o rendimento de hoje ({formatPercent((incomeCents / valueCents) * 100, 2)} ao mês sobre o patrimônio), sem valorização das cotas, inflação ou impostos. É uma estimativa, não recomendação.
+      </p>
+    </Card>
   );
 }

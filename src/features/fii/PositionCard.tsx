@@ -7,9 +7,10 @@ import { cn } from '@/lib/cn';
 import { capitalize, formatDate, formatDateTime } from '@/lib/dates';
 import { formatPercent } from '@/lib/money';
 import type { AssetQuote, FiiPosition, FiiTrade } from '@/lib/types';
-import { kindLabel, monthStatus, payStatus, yieldOnCost, type FiiPayment, type MonthMode } from '@/domain/fii';
+import { kindLabel, magicNumber, monthlyPerShare, monthStatus, payStatus, yieldOnCost, type FiiPayment, type MonthMode } from '@/domain/fii';
 import type { FiiSyncResult } from '@/services/fii';
 import { fmtRate, unitLabel } from './shared';
+import { MagicBar } from './StatDetails';
 
 export interface PositionCardProps {
   position: FiiPosition;
@@ -41,6 +42,7 @@ export function PositionCard(props: PositionCardProps) {
   const yoc = featured ? yieldOnCost(featured.dist.rate, position.avg_price_cents) : null;
   const isStock = position.asset_type === 'stock';
   const per = isStock ? 'por ação' : 'por cota';
+  const magic = magicNumber(quote?.price ?? null, monthlyPerShare(position.asset_type ?? 'fii', payments, today));
 
   return (
     <Card className="overflow-hidden">
@@ -134,6 +136,13 @@ export function PositionCard(props: PositionCardProps) {
                 </>
               )}
             </dl>
+          )}
+
+          {magic !== null && (
+            <div className="mt-4 rounded-xl bg-brand/8 px-3 py-2.5">
+              <MagicBar magic={magic} quantity={position.quantity} type={position.asset_type ?? 'fii'} />
+              <p className="mt-1.5 text-[12px] text-subtle">Com essa quantidade, a renda de um mês compra mais {isStock ? 'uma ação' : 'uma cota'} sozinha.</p>
+            </div>
           )}
 
           <h3 className="mt-5 text-[13px] font-semibold uppercase tracking-wide text-subtle">Compras e vendas</h3>
