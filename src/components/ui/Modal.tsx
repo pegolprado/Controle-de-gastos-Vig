@@ -24,6 +24,12 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descId = useId();
+  // a página atrás pode re-renderizar (nova função onClose) enquanto a pessoa digita:
+  // o efeito abaixo só roda ao abrir/fechar, senão o foco pularia de volta para o primeiro campo
+  const latest = useRef({ onClose, locked });
+  useEffect(() => {
+    latest.current = { onClose, locked };
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -34,9 +40,9 @@ export function Modal({ open, onClose, title, description, children, footer, siz
     const first = el?.querySelector<HTMLElement>('[autofocus],[data-autofocus]') ?? focusables()[0];
     setTimeout(() => first?.focus(), 30);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !locked) {
+      if (e.key === 'Escape' && !latest.current.locked) {
         e.stopPropagation();
-        onClose();
+        latest.current.onClose();
       }
       if (e.key === 'Tab') {
         const list = Array.from(focusables());
@@ -60,7 +66,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       document.body.style.overflow = overflow;
       previouslyFocused?.focus?.();
     };
-  }, [open, onClose, locked]);
+  }, [open]);
 
   if (!open) return null;
   const widths = { sm: 'sm:max-w-md', md: 'sm:max-w-lg', lg: 'sm:max-w-2xl' };

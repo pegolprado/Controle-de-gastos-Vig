@@ -25,6 +25,7 @@
     "@hookform/resolvers": "^5.9.1",
     "@supabase/supabase-js": "^2.118.0",
     "@tanstack/react-query": "^5.104.3",
+    "@tesseract.js-data/por": "^1.0.0",
     "clsx": "^2.1.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.9",
@@ -35,6 +36,7 @@
     "react-router-dom": "^7.18.4",
     "recharts": "^3.10.1",
     "sonner": "^2.0.8",
+    "tesseract.js": "^6.0.1",
     "workbox-window": "^7.4.1",
     "zod": "^4.6.7"
   },

@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
@@ -35,6 +35,27 @@ function versionManifest(): Plugin {
   };
 }
 
+/**
+ * Leitor de comprovantes (OCR) servido pelo próprio app — a política de segurança não permite
+ * baixar código de CDNs. Só é baixado quando alguém fotografa um comprovante (fora do pré-cache).
+ */
+function ocrAssets(): Plugin {
+  const files: Array<[string, string]> = [
+    ['node_modules/tesseract.js/dist/worker.min.js', 'worker.min.js'],
+    ['node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js', 'tesseract-core-lstm.wasm.js'],
+    ['node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js', 'tesseract-core-simd-lstm.wasm.js'],
+    ['node_modules/@tesseract.js-data/por/4.0.0_best_int/por.traineddata.gz', 'por.traineddata.gz'],
+  ];
+  return {
+    name: 'finance-mv-ocr',
+    buildStart() {
+      const dir = fileURLToPath(new URL('./public/ocr/', import.meta.url));
+      mkdirSync(dir, { recursive: true });
+      for (const [from, to] of files) if (!existsSync(dir + to)) copyFileSync(fileURLToPath(new URL(`./${from}`, import.meta.url)), dir + to);
+    },
+  };
+}
+
 const base = process.env.VITE_BASE || '/';
 
 export default defineConfig({
@@ -51,6 +72,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     versionManifest(),
+    ocrAssets(),
     VitePWA({
       // 'prompt': a nova versão só assume o controle quando o usuário confirma
       // (ou automaticamente quando não há formulário aberto). Nada é perdido.
@@ -90,7 +112,7 @@ export default defineConfig({
         // avisos no celular (Web Push): recebe e abre a notificação
         importScripts: [`${base}push-sw.js`],
         // o gerador de PDF é pesado e raro: baixado sob demanda, não no pré-cache
-        globIgnores: ['**/jspdf*.js', '**/html2canvas*.js', '**/index.es-*.js', '**/purify*.js', '**/jspdf.plugin*.js'],
+        globIgnores: ['ocr/**', '**/jspdf*.js', '**/html2canvas*.js', '**/index.es-*.js', '**/purify*.js', '**/jspdf.plugin*.js'],
         navigateFallback: `${base}index.html`,
         navigateFallbackDenylist: [/\/version\.json$/],
         cleanupOutdatedCaches: true,

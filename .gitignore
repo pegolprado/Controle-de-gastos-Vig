@@ -13,3 +13,4 @@ supabase/.temp
 supabase/.branches
 e2e-screens
 *.bundle
+public/ocr
