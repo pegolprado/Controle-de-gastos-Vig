@@ -74,6 +74,31 @@ test('Renda: FII e ações, mês vigente, compras com data e lançamento de rece
   await panel.screenshot({ path: `e2e-screens/carteira-${test.info().project.name}-escuro.png` });
   await page.emulateMedia({ colorScheme: 'light' });
 
+  // quadros do resumo abrem o detalhe
+  await page.getByRole('button', { name: 'A receber este mês: ver detalhes' }).click();
+  let sheet = page.getByRole('dialog', { name: 'A receber este mês' });
+  await expect(sheet.getByRole('list', { name: 'Pagamentos' }).getByRole('listitem')).toHaveCount(3);
+  await expect(sheet.getByText(/^BRCO11/)).toBeVisible();
+  await sheet.screenshot({ path: `e2e-screens/renda-receber-${test.info().project.name}.png` });
+  await sheet.getByRole('button', { name: 'Fechar' }).click();
+  await page.getByRole('button', { name: 'Recebido este mês: ver detalhes' }).click();
+  sheet = page.getByRole('dialog', { name: 'Recebido este mês' });
+  await expect(sheet.getByText(/^HSML11/)).toBeVisible();
+  await sheet.getByRole('button', { name: 'Fechar' }).click();
+  await page.getByRole('button', { name: 'Últimos 12 meses: ver detalhes' }).click();
+  sheet = page.getByRole('dialog', { name: 'Últimos 12 meses' });
+  await expect(sheet.getByRole('list', { name: 'Proventos por mês' }).getByRole('listitem')).toHaveCount(12);
+  await expect(sheet.getByText('Quem mais pagou')).toBeVisible();
+  await sheet.getByRole('button', { name: 'Fechar' }).click();
+  await page.getByRole('button', { name: 'Valor da carteira: ver detalhes' }).click();
+  sheet = page.getByRole('dialog', { name: 'Valor da carteira' });
+  await expect(sheet.getByText(/^Número mágico: \d/).first()).toBeVisible();
+  await sheet.screenshot({ path: `e2e-screens/renda-carteira-${test.info().project.name}.png` });
+  await sheet.getByRole('button', { name: 'Simular a bola de neve' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByRole('region', { name: 'Bola de neve' }).getByText('Em 10 anos')).toBeVisible();
+  await page.getByRole('radio', { name: 'Carteira', exact: true }).click();
+
   // compra depois da data com: entra na quantidade, mas não no provento já pago
   const hsml = page.locator('div.overflow-hidden', { has: page.getByText('HSML11', { exact: true }) });
   await hsml.getByRole('button', { name: 'Mais detalhes' }).click();

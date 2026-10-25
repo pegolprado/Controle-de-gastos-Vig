@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Building2, Plus, RefreshCw } from 'lucide-react';
+import { Building2, ChevronRight, Plus, RefreshCw } from 'lucide-react';
 import { useWorkspace, useWsId } from '@/app/WorkspaceProvider';
 import { wsKey } from '@/hooks/useFinance';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -11,7 +11,7 @@ import { Money } from '@/components/ui/Money';
 import { Segmented } from '@/components/ui/Segmented';
 import { useConfirm } from '@/components/ui/Confirm';
 import { cn } from '@/lib/cn';
-import { capitalize, monthLabel } from '@/lib/dates';
+import { addMonths, capitalize, monthLabel, startOfMonth } from '@/lib/dates';
 import { formatBRL } from '@/lib/money';
 import { errorMessage } from '@/lib/errors';
 import { invalidateFinance, queryClient } from '@/lib/queryClient';
@@ -32,6 +32,7 @@ import { listByRequestIds } from '@/services/transactions';
 import { AddAssetDialog, LaunchDialog, TradeDialog } from './dialogs';
 import { PortfolioOverview } from './PortfolioOverview';
 import { PositionCard } from './PositionCard';
+import { StatDetails, type StatKind } from './StatDetails';
 import { launchId, useToday } from './shared';
 import { AgendaTab, GoalTab, IrTab } from './tabs';
 
@@ -47,6 +48,7 @@ export default function FiiPage() {
   const [trading, setTrading] = useState<FiiPosition | null>(null);
   const [launching, setLaunching] = useState<FiiPayment[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [detail, setDetail] = useState<StatKind | null>(null);
   const today = useToday();
 
   const positions = useQuery({ queryKey: wsKey(ws, 'fii-positions'), queryFn: () => listFiiPositions(ws) });
@@ -128,6 +130,9 @@ export default function FiiPage() {
   const nextMonth = byPosition.filter((x) => x.mode === 'next').map((x) => x.featured!).sort((a, b) => a.dist.payment_date.localeCompare(b.dist.payment_date));
   const thisMonthCents = thisMonth.reduce((s, p) => s + p.amount_cents, 0);
   const thisMonthProjected = thisMonth.filter((p) => p.projected).reduce((s, p) => s + p.amount_cents, 0);
+  const monthStart = startOfMonth(today);
+  const from12 = addMonths(monthStart, -11);
+  const paidSince = (from: string) => byPosition.flatMap((x) => x.payments.filter((p) => !p.projected && p.dist.payment_date >= from && p.dist.payment_date <= today));
   const portfolioCents = byPosition.reduce((s, x) => s + Math.round((quoteOf.get(x.position.ticker)?.price ?? 0) * x.position.quantity * 100), 0);
 
   const goalItems = useMemo(
@@ -246,15 +251,16 @@ export default function FiiPage() {
         <>
           <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Resumo dos rendimentos">
             <Stat
+              onOpen={() => setDetail('receber')}
               label="A receber este mês"
               cents={thisMonthCents}
               tone="warning"
               loading={loading}
               footer={`${thisMonth.length} ${thisMonth.length === 1 ? 'ativo' : 'ativos'}${thisMonthProjected ? ` · ${formatBRL(thisMonthProjected)} previsto` : ''}`}
             />
-            <Stat label="Recebido este mês" cents={summary.this_month_cents} tone="positive" loading={loading} />
-            <Stat label="Últimos 12 meses" cents={summary.last12_cents} tone="positive" loading={loading} footer={`média ${formatBRL(summary.monthly_avg_cents)}/mês`} />
-            <Stat label="Valor da carteira" cents={portfolioCents} tone="neutral" loading={loading} footer="pela última cotação" />
+            <Stat onOpen={() => setDetail('recebido')} label="Recebido este mês" cents={summary.this_month_cents} tone="positive" loading={loading} />
+            <Stat onOpen={() => setDetail('12m')} label="Últimos 12 meses" cents={summary.last12_cents} tone="positive" loading={loading} footer={`média ${formatBRL(summary.monthly_avg_cents)}/mês`} />
+            <Stat onOpen={() => setDetail('carteira')} label="Valor da carteira" cents={portfolioCents} tone="neutral" loading={loading} footer="pela última cotação" />
           </section>
 
           <Segmented
@@ -340,15 +346,36 @@ export default function FiiPage() {
 
       {adding && <AddAssetDialog existing={positions.data ?? []} onClose={() => setAdding(false)} />}
       {trading && <TradeDialog position={trading} onClose={() => setTrading(null)} />}
+      {detail && (
+        <StatDetails
+          kind={detail}
+          onClose={() => setDetail(null)}
+          onGo={(t) => {
+            setDetail(null);
+            setTab(t);
+          }}
+          today={today}
+          names={tickerNames}
+          thisMonth={thisMonth}
+          received={paidSince(monthStart)}
+          last12={paidSince(from12)}
+          months={summary.months}
+          holdings={holdings}
+        />
+      )}
       {launching && <LaunchDialog payments={launching} onClose={() => setLaunching(null)} />}
     </>
   );
 }
 
-function Stat({ label, cents, tone, loading, footer }: { label: string; cents: number; tone: 'positive' | 'warning' | 'neutral'; loading?: boolean; footer?: string }) {
+function Stat({ label, cents, tone, loading, footer, onOpen }: { label: string; cents: number; tone: 'positive' | 'warning' | 'neutral'; loading?: boolean; footer?: string; onOpen: () => void }) {
   return (
-    <Card className="p-4 sm:p-5">
-      <p className="text-[13px] font-semibold text-muted">{label}</p>
+    <Card className="group relative p-4 transition hover:border-line-strong sm:p-5">
+      <button type="button" onClick={onOpen} disabled={loading} className="absolute inset-0 rounded-[inherit]" aria-label={`${label}: ver detalhes`} />
+      <p className="flex items-center justify-between gap-1 text-[13px] font-semibold text-muted">
+        {label}
+        <ChevronRight className="size-4 shrink-0 text-subtle transition group-hover:translate-x-0.5" aria-hidden />
+      </p>
       {loading ? (
         <Skeleton className="mt-2 h-8 w-28" />
       ) : (
