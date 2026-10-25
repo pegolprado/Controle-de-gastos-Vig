@@ -17,7 +17,14 @@ async function setup(page: Page): Promise<MockState> {
 async function add(page: Page, ticker: string, qty: string, type: 'fii' | 'stock' = 'fii') {
   await page.getByRole('button', { name: /^Adicionar/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Adicionar à carteira' });
-  if (type === 'stock') await dialog.getByRole('radio', { name: 'Ação' }).click();
+  if (type === 'stock') {
+    // a janela ainda pode estar deslizando: um clique no meio da animação se perde
+    const radio = dialog.getByRole('radio', { name: 'Ação' });
+    await expect(async () => {
+      await radio.click();
+      await expect(radio).toHaveAttribute('aria-checked', 'true', { timeout: 1000 });
+    }).toPass();
+  }
   await dialog.getByLabel(type === 'fii' ? 'Código do fundo' : 'Código da ação').fill(ticker);
   await dialog.getByLabel(type === 'fii' ? 'Quantidade de cotas' : 'Quantidade de ações').fill(qty);
   await dialog.getByRole('button', { name: 'Salvar' }).click();

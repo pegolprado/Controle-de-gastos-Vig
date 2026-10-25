@@ -317,3 +317,18 @@ export async function listByRequestIds(ws: string, ids: string[]) {
     await supabase.from('transactions').select('id, client_request_id').eq('workspace_id', ws).in('client_request_id', ids),
   ) as Array<Pick<Transaction, 'id' | 'client_request_id'>>;
 }
+
+/** Despesas pagas pelas contas desde uma data (para estimar o gasto do dia a dia). */
+export async function listPaidExpensesSince(ws: string, since: string): Promise<Transaction[]> {
+  return unwrapList(
+    await supabase
+      .from('transactions')
+      .select('*')
+      .eq('workspace_id', ws)
+      .eq('kind', 'expense')
+      .eq('status', 'paid')
+      .gte('occurred_on', since)
+      .order('occurred_on', { ascending: false })
+      .limit(2000),
+  );
+}

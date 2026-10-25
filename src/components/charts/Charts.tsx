@@ -4,7 +4,7 @@
  * texto sempre em tokens de texto (nunca na cor da série), tooltip em todo gráfico,
  * legenda presente para 2+ séries e tabela acessível para leitores de tela.
  */
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts';
 import { formatBRL, formatBRLCompact } from '@/lib/money';
 
 export interface SeriesPoint {
@@ -147,4 +147,66 @@ export function AreaTrend({ data, series, height = 220, caption }: { data: Serie
   );
 }
 
-export default { BarsChart, AreaTrend };
+export interface BalancePoint {
+  label: string;
+  date: string;
+  balance: number;
+  /** o que entrou/saiu no dia (para o tooltip) */
+  notes: string[];
+}
+
+/** Saldo previsto dia a dia: degraus (o saldo muda no dia do evento), linha do zero e marcador do salário. */
+export function BalanceForecast({ data, height = 240, caption, paydayLabel }: { data: BalancePoint[]; height?: number; caption: string; paydayLabel?: string }) {
+  const min = Math.min(0, ...data.map((d) => d.balance));
+  return (
+    <figure aria-label={caption}>
+      <div style={{ height }} aria-hidden>
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 16, right: 8, left: 4, bottom: 0 }}>
+            <defs>
+              <linearGradient id="fill-forecast" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--viz-1)" stopOpacity={0.22} />
+                <stop offset="100%" stopColor="var(--viz-1)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} stroke="var(--border)" />
+            <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" minTickGap={24} />
+            <YAxis {...axisProps} width={68} domain={[min < 0 ? 'dataMin' : 0, 'auto']} tickFormatter={(v: number) => formatBRLCompact(v)} />
+            {min < 0 && <ReferenceLine y={0} stroke="var(--negative)" strokeDasharray="4 4" />}
+            {paydayLabel && <ReferenceLine x={paydayLabel} stroke="var(--border-strong)" strokeDasharray="3 3" label={{ value: 'salário', position: 'top', fill: 'var(--text-subtle)', fontSize: 11 }} />}
+            <Tooltip
+              cursor={{ stroke: 'var(--border-strong)' }}
+              content={({ active, payload }) => {
+                const p = active ? (payload?.[0]?.payload as BalancePoint | undefined) : undefined;
+                if (!p) return null;
+                return (
+                  <div className="max-w-[240px] rounded-xl border border-line bg-elevated px-3 py-2 text-[13px] shadow-float">
+                    <p className="font-semibold">{p.date}</p>
+                    <p className="text-muted">
+                      Saldo previsto <span className={p.balance < 0 ? 'font-semibold text-negative' : 'font-semibold text-fg'}>{formatBRL(p.balance)}</span>
+                    </p>
+                    {p.notes.slice(0, 4).map((n) => (
+                      <p key={n} className="truncate text-[12px] text-subtle">{n}</p>
+                    ))}
+                  </div>
+                );
+              }}
+            />
+            <Area type="stepAfter" dataKey="balance" name="Saldo previsto" stroke="var(--viz-1)" strokeWidth={2} fill="url(#fill-forecast)" dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface)' }} animationDuration={600} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+      <table className="sr-only">
+        <caption>{caption}</caption>
+        <thead><tr><th>Dia</th><th>Saldo previsto</th><th>Movimentos</th></tr></thead>
+        <tbody>
+          {data.map((d) => (
+            <tr key={d.date}><td>{d.date}</td><td>{formatBRL(d.balance)}</td><td>{d.notes.join('; ')}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </figure>
+  );
+}
+
+export default { BarsChart, AreaTrend, BalanceForecast };
