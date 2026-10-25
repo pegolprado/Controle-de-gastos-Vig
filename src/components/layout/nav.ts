@@ -1,4 +1,4 @@
-import { ArrowLeftRight, BarChart3, Building2, CalendarClock, CreditCard, Gauge, Landmark, PieChart, Repeat, Settings, Shield, Target, Users } from 'lucide-react';
+import { ArrowLeftRight, LineChart, BarChart3, Building2, CalendarClock, CreditCard, Gauge, Landmark, PieChart, Repeat, Settings, Shield, Target, Users } from 'lucide-react';
 
 export const NAV = [
   { to: '/', label: 'Painel', icon: Gauge, end: true },
@@ -6,6 +6,7 @@ export const NAV = [
   { to: '/contas', label: 'Contas', icon: Landmark },
   { to: '/cartoes', label: 'Cartões', icon: CreditCard },
   { to: '/compromissos', label: 'Compromissos', icon: CalendarClock },
+  { to: '/previsao', label: 'Previsão', icon: LineChart },
   { to: '/orcamentos', label: 'Orçamentos', icon: PieChart },
   { to: '/metas', label: 'Metas', icon: Target },
   { to: '/recorrencias', label: 'Recorrências', icon: Repeat },

@@ -24,6 +24,7 @@ import { INVOICE_STATUS_LABEL } from '@/domain/labels';
 import type { Transaction } from '@/lib/types';
 import { reportCategories, reportMonthly, upcomingCommitments } from '@/services/reports';
 import { MonthRecap } from './MonthRecap';
+import { ForecastCard } from '@/features/forecast/ForecastCard';
 import { budgetProgress, listRecurrences } from '@/services/planning';
 
 function greeting() {
@@ -213,6 +214,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      <ForecastCard />
       <MonthRecap />
 
       {/* Indicadores do mês */}
