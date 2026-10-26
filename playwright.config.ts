@@ -1,6 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 import { existsSync } from 'node:fs';
 
+// o navegador roda no fuso de São Paulo: os testes (datas montadas no Node e o mock) também,
+// senão perto da meia-noite UTC "hoje" do teste e do app viram dias diferentes
+process.env.TZ = 'America/Sao_Paulo';
+
 const localChromium = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const launchOptions = existsSync(localChromium) ? { executablePath: localChromium } : {};
 
