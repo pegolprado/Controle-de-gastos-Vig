@@ -6,7 +6,7 @@ import { addDays, todayISO } from '@/lib/dates';
 import { buildForecast, dailySpending, type Forecast } from '@/domain/forecast';
 import { listInvoices } from '@/services/cards';
 import { listRecurrences } from '@/services/planning';
-import { listOpenCommitments, listPaidExpensesSince } from '@/services/transactions';
+import { listOpenCommitments, listPaidExpensesSince, listReceivedIncomesSince } from '@/services/transactions';
 
 /** Previsão do saldo das contas que entram no total (as mesmas do Painel). */
 export function useForecast(opts: { withDaily?: boolean } = {}): { data: Forecast | null; isLoading: boolean; error: unknown } {
@@ -19,9 +19,10 @@ export function useForecast(opts: { withDaily?: boolean } = {}): { data: Forecas
   const recurrences = useQuery({ queryKey: wsKey(ws, 'recurrences'), queryFn: () => listRecurrences(ws) });
   const invoices = useQuery({ queryKey: wsKey(ws, 'invoices', 'open'), queryFn: () => listInvoices(ws, { openOnly: true }) });
   const history = useQuery({ queryKey: wsKey(ws, 'forecast-history', today), queryFn: () => listPaidExpensesSince(ws, addDays(today, -60)) });
+  const incomes = useQuery({ queryKey: wsKey(ws, 'forecast-incomes', today), queryFn: () => listReceivedIncomesSince(ws, addDays(today, -120)) });
   const withDaily = opts.withDaily ?? true;
 
-  const queries = [accounts, cards, balances, pending, recurrences, invoices, history];
+  const queries = [accounts, cards, balances, pending, recurrences, invoices, history, incomes];
   const data = useMemo(() => {
     if (queries.some((q) => !q.data)) return null;
     const included = new Set((accounts.data ?? []).filter((a) => a.include_in_total && !a.archived).map((a) => a.id));
@@ -37,6 +38,7 @@ export function useForecast(opts: { withDaily?: boolean } = {}): { data: Forecas
       cardIds,
       accountIds: included,
       dailySpend: withDaily ? dailySpending(history.data!, today) : 0,
+      incomeHistory: incomes.data!,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today, withDaily, ...queries.map((q) => q.data)]);

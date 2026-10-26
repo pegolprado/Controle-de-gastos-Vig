@@ -356,3 +356,18 @@ export async function listExpensesSince(ws: string, since: string): Promise<Expe
   }
   return out;
 }
+
+/** Receitas recebidas desde uma data (para achar o salário que cai todo mês). */
+export async function listReceivedIncomesSince(ws: string, since: string) {
+  return unwrapList<Pick<Transaction, 'description' | 'amount_cents' | 'occurred_on' | 'kind' | 'status' | 'recurrence_id' | 'account_id'>>(
+    await supabase
+      .from('transactions')
+      .select('description, amount_cents, occurred_on, kind, status, recurrence_id, account_id')
+      .eq('workspace_id', ws)
+      .eq('kind', 'income')
+      .eq('status', 'received')
+      .gte('occurred_on', since)
+      .order('occurred_on', { ascending: true })
+      .limit(1000),
+  );
+}

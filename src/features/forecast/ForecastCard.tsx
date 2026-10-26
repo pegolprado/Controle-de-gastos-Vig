@@ -35,7 +35,11 @@ export function ForecastCard() {
               <>Em 30 dias, saldo previsto de <strong>{formatBRL(f.end)}</strong>.</>
             )}
           </p>
-          {!negative && <p className="text-[13px] text-subtle">Dá para gastar até {formatBRL(free.safe)} hoje sem ficar no vermelho.</p>}
+          {!f.payday ? (
+            <p className="text-[13px] text-subtle">Salário não encontrado: cadastre como receita recorrente para a previsão ficar certa.</p>
+          ) : (
+            !negative && <p className="text-[13px] text-subtle">Dá para gastar até {formatBRL(free.safe)} hoje sem ficar no vermelho.</p>
+          )}
         </div>
       </div>
     </Card>

@@ -56,3 +56,21 @@ test('previsão avisa quando o saldo vai ficar negativo antes do salário', asyn
   await expect(page.getByRole('region', { name: 'Resumo da previsão' }).getByText(/negativo/)).toBeVisible();
   await expect(page.getByRole('list', { name: 'Movimentos previstos' }).getByText('Reforma')).toBeVisible();
 });
+
+test('sem salário cadastrado: explica, não confunde provento com salário e mostra a conta', async ({ page }) => {
+  const state = createState({ withData: true });
+  const acc = state.tables.accounts[0]!;
+  const base = state.tables.transactions[0]!;
+  state.tables.transactions.push({ ...base, id: 'jcp', kind: 'income', status: 'pending', description: 'JCP PETR4', amount_cents: 114, paid_cents: 0, category_id: null, account_id: acc.id, occurred_on: day(20), due_on: day(20) });
+  await installMock(page, state);
+  await login(page);
+  await expect(page.getByText(/Salário não encontrado/)).toBeVisible();
+  await page.goto('/previsao');
+  const summary = page.getByRole('region', { name: 'Resumo da previsão' });
+  await expect(summary.getByText('Não encontrei seu salário')).toBeVisible();
+  await summary.getByText('Por que esse número?').click();
+  await expect(summary.getByText('Saldo hoje')).toBeVisible();
+  await expect(summary.getByText('Entradas previstas')).toBeVisible();
+  await summary.getByRole('button', { name: 'Cadastrar salário' }).click();
+  await expect(page.getByRole('dialog', { name: 'Novo lançamento' }).getByRole('radio', { name: 'Receita' })).toHaveAttribute('aria-checked', 'true');
+});
