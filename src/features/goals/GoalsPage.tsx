@@ -13,7 +13,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Money } from '@/components/ui/Money';
 import { ColorPicker } from '@/components/ui/CategoryIcon';
 import { useConfirm } from '@/components/ui/Confirm';
-import { addMonths, capitalize, formatDate, monthLabel, startOfMonth, todayISO } from '@/lib/dates';
+import { capitalize, formatDate, monthLabel, todayISO } from '@/lib/dates';
 import { cn } from '@/lib/cn';
 import { formatBRL, formatPercent } from '@/lib/money';
 import { errorMessage } from '@/lib/errors';
@@ -21,24 +21,12 @@ import { newRequestId } from '@/lib/id';
 import { invalidateFinance } from '@/lib/queryClient';
 import type { Goal } from '@/lib/types';
 import { addContribution, createGoal, deleteGoal, listGoals, updateGoal } from '@/services/planning';
-import { reportMonthly } from '@/services/reports';
-import { capacity, emergencyTarget, GOAL_TYPES, isGoalType, planGoal, type Capacity, type GoalPlan, type GoalType } from '@/domain/goals';
+import { useCapacity } from './useCapacity';
+import { emergencyTarget, GOAL_TYPES, isGoalType, planGoal, type Capacity, type GoalPlan, type GoalType } from '@/domain/goals';
 
 const TYPE_ICON: Record<GoalType, LucideIcon> = { emergency: ShieldCheck, car: Car, home: Home, travel: Plane, debt: CreditCard, purchase: ShoppingBag, target: Target };
 const goalType = (g: Pick<Goal, 'icon'>): GoalType => (isGoalType(g.icon) ? g.icon : 'target');
 const when = (iso: string) => capitalize(monthLabel(iso));
-
-/** Sobra mensal média (receitas − despesas dos últimos meses completos). */
-function useCapacity() {
-  const ws = useWsId();
-  const today = todayISO();
-  const q = useQuery({
-    queryKey: wsKey(ws, 'report-monthly', 'goals', startOfMonth(today)),
-    queryFn: () => reportMonthly(ws, addMonths(startOfMonth(today), -6), startOfMonth(today)),
-    staleTime: 10 * 60_000,
-  });
-  return useMemo(() => (q.data ? capacity(q.data, today) : null), [q.data, today]);
-}
 
 /** Planos de todas as metas: a sobra é dividida pela ordem de prazo (as mais urgentes primeiro). */
 function plansFor(goals: Goal[], cap: Capacity | null, today: string): Map<string, GoalPlan> {
