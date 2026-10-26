@@ -22,8 +22,8 @@ import { setFormDirty, trackPending } from '@/lib/formGuard';
 import { cn } from '@/lib/cn';
 import type { Category, PaymentMethod, RecurrenceFreq, Transaction, TxKind, TxStatus } from '@/lib/types';
 import { createInstallments, createTransaction, listCategoryHints, updateTransaction, uploadReceipt, type TxInput } from '@/services/transactions';
-import { descriptionKey } from '@/lib/statement';
-import { CATEGORY_PARENT, parseQuickEntry, type QuickEntry } from '@/domain/quickEntry';
+import { parseQuickEntry, type QuickEntry } from '@/domain/quickEntry';
+import { historyCategory as historyCat, quickCategory, quickSource } from './quickResolve';
 import { QuickEntryBar, type ReceiptResult } from './QuickEntryBar';
 import { listInvoices } from '@/services/cards';
 import { createRecurrence, settleOccurrence, updateRecurrence } from '@/services/planning';
@@ -167,15 +167,7 @@ export function TransactionForm({ initialKind = 'expense', existing, duplicateOf
     enabled: !editing,
     staleTime: 10 * 60_000,
   });
-  const historyCategory = (description: string, kind: TxKind) => {
-    const typed = descriptionKey(description);
-    if (typed.length < 3 || !hints.data) return '';
-    const valid = (id: string | null) => !!id && categories.some((c) => c.id === id && c.kind === kind && !c.archived);
-    const same = hints.data.filter((h) => h.kind === kind && valid(h.category_id));
-    const exact = same.find((h) => descriptionKey(h.description) === typed);
-    const partial = typed.length >= 4 ? same.find((h) => { const k = descriptionKey(h.description); return k.startsWith(typed) || (k.length >= 4 && typed.startsWith(k)); }) : undefined;
-    return (exact ?? partial)?.category_id ?? '';
-  };
+  const historyCategory = (description: string, kind: TxKind) => historyCat(description, kind, categories, hints.data);
   useEffect(() => {
     if (catTouched || (f.kind !== 'income' && f.kind !== 'expense') || !hints.data) return;
     const found = historyCategory(f.description, f.kind);
@@ -350,13 +342,11 @@ export function TransactionForm({ initialKind = 'expense', existing, duplicateOf
   const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   function applyQuick(q: QuickEntry) {
     const kind = q.kind;
-    const fromHistory = historyCategory(q.description, kind);
-    const named = (name: string | undefined) => (name ? categories.find((c) => c.kind === kind && !c.archived && norm(c.name) === norm(name))?.id ?? '' : '');
-    const byName = q.categoryName ? named(q.categoryName) || named(CATEGORY_PARENT[q.categoryName]) : '';
-    const category = fromHistory || byName;
-    const card = q.sourceName ? activeCards.find((c) => norm(c.name) === norm(q.sourceName!)) : undefined;
-    const account = q.sourceName ? activeAccounts.find((a) => norm(a.name) === norm(q.sourceName!)) : undefined;
-    const useCard = kind === 'expense' && activeCards.length > 0 && (Boolean(card) || q.credit || q.installments > 1);
+    const category = quickCategory(q, categories, hints.data);
+    const named = (n: string | null) => (n ? norm(n) : '');
+    const card = q.sourceName ? activeCards.find((c) => norm(c.name) === named(q.sourceName)) : undefined;
+    const account = q.sourceName ? activeAccounts.find((a) => norm(a.name) === named(q.sourceName)) : undefined;
+    const { useCard } = quickSource(q, accounts, cards);
     setF((s) => ({
       ...s,
       kind,

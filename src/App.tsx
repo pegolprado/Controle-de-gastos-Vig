@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { QuickAddProvider } from '@/features/transactions/QuickAdd';
+import { VoiceCaptureProvider } from '@/features/transactions/VoiceCapture';
 import { FullScreenLoader, PublicOnly, RequireAppOwner, RequireAuth } from '@/app/guards';
 import { MaintenanceBanner } from '@/app/MaintenanceBanner';
 import { UpdatePrompt } from '@/pwa/UpdatePrompt';
@@ -49,7 +50,9 @@ function Protected() {
   return (
     <RequireAuth>
       <QuickAddProvider>
-        <AppShell banner={<MaintenanceBanner />} />
+        <VoiceCaptureProvider>
+          <AppShell banner={<MaintenanceBanner />} />
+        </VoiceCaptureProvider>
       </QuickAddProvider>
     </RequireAuth>
   );

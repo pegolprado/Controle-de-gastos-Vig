@@ -1,24 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Camera, Loader2, Mic, Sparkles, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/cn';
 import { parseReceiptText } from '@/domain/quickEntry';
-
-interface SpeechRecognitionLike {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
-  onerror: ((e: { error: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-}
-
-const SpeechCtor = (): (new () => SpeechRecognitionLike) | null => {
-  const w = window as unknown as Record<string, unknown>;
-  return (w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null) as (new () => SpeechRecognitionLike) | null;
-};
+import { useSpeech } from './speech';
 
 export interface ReceiptResult {
   amount_cents: number | null;
@@ -54,14 +39,8 @@ async function readReceipt(file: File, onProgress: (p: number) => void): Promise
  */
 export function QuickEntryBar({ onText, onReceipt }: { onText: (text: string) => void; onReceipt: (r: ReceiptResult) => void }) {
   const [text, setText] = useState('');
-  const [listening, setListening] = useState(false);
   const [reading, setReading] = useState<number | null>(null);
-  const rec = useRef<SpeechRecognitionLike | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const canSpeak = typeof window !== 'undefined' && SpeechCtor() !== null;
-
-  useEffect(() => () => rec.current?.stop(), []);
-
   const applied = useRef('');
   const apply = (value = text) => {
     const v = value.trim();
@@ -69,37 +48,14 @@ export function QuickEntryBar({ onText, onReceipt }: { onText: (text: string) =>
     applied.current = v;
     onText(v);
   };
-
-  function toggleVoice() {
-    if (listening) {
-      rec.current?.stop();
-      return;
-    }
-    const Ctor = SpeechCtor();
-    if (!Ctor) return;
-    const r = new Ctor();
-    r.lang = 'pt-BR';
-    r.interimResults = true;
-    r.continuous = false;
-    let finalText = '';
-    r.onresult = (e) => {
-      const parts = Array.from(e.results);
-      const said = parts.map((p) => p[0]!.transcript).join(' ');
-      setText(said);
-      if (parts.every((p) => p.isFinal)) finalText = said;
-    };
-    r.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') toast.error('Permita o uso do microfone para lançar por voz.');
-      else if (e.error !== 'no-speech' && e.error !== 'aborted') toast.error('Não consegui ouvir. Tente de novo.');
-    };
-    r.onend = () => {
-      setListening(false);
-      if (finalText) apply(finalText);
-    };
-    rec.current = r;
-    setListening(true);
-    r.start();
-  }
+  const speech = useSpeech((said) => {
+    setText(said);
+    apply(said);
+  });
+  const listening = speech.listening;
+  const canSpeak = speech.supported;
+  const toggleVoice = () => (listening ? speech.stop() : speech.start());
+  const shown = listening && speech.transcript ? speech.transcript : text;
 
   async function pickReceipt(file: File | undefined) {
     if (!file) return;
@@ -126,7 +82,7 @@ export function QuickEntryBar({ onText, onReceipt }: { onText: (text: string) =>
       <div className="flex items-center gap-1.5">
         <Sparkles className="ml-1 size-4 shrink-0 text-brand" aria-hidden />
         <input
-          value={text}
+          value={shown}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
