@@ -15,7 +15,7 @@ export function ForecastCard() {
   const free = canSpend(f, 0);
   const payday = f.payday ? f.days.find((d) => d.date === f.payday!.date) : undefined;
   return (
-    <Card className={cn('group relative mt-4 p-4 transition hover:border-line-strong sm:p-5', negative && 'border-negative/40')}>
+    <Card className={cn('group relative p-4 transition hover:border-line-strong sm:p-5', negative && 'border-negative/40')}>
       <Link to="/previsao" className="absolute inset-0 rounded-[inherit]" aria-label="Previsão do saldo: ver detalhes" />
       <div className="flex items-start gap-3">
         <span className={cn('grid size-10 shrink-0 place-items-center rounded-xl', negative ? 'bg-negative/12 text-negative' : 'bg-brand/12 text-brand')}>
