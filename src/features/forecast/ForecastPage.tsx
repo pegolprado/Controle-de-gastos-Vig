@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, CircleAlert, LineChart, Wallet } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CircleAlert, HelpCircle, LineChart, Plus, Wallet } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { useQuickAdd } from '@/features/transactions/QuickAdd';
+import { BIG_ONE_OFF } from '@/domain/forecast';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge, Card, EmptyState, ErrorState, Skeleton } from '@/components/ui/Card';
 import { Field, Switch } from '@/components/ui/Field';
@@ -34,6 +37,7 @@ export default function ForecastPage() {
     }
   };
   const { data: f, isLoading, error } = useForecast({ withDaily });
+  const quickAdd = useQuickAdd();
   const [spend, setSpend] = useState(0);
   const today = todayISO();
 
@@ -93,12 +97,27 @@ export default function ForecastPage() {
               <Stat label="Hoje" cents={f.start} />
               <Stat label={`Ponto mais baixo · ${short(f.low.date)}`} cents={f.low.balance} />
               {f.payday && paydayDay ? (
-                <Stat label={`No dia do salário · ${short(f.payday.date)}`} cents={paydayDay.balance} hint={`${f.payday.description} em ${diffDays(f.payday.date, today)} dias`} />
+                <Stat label={`No dia do salário · ${short(f.payday.date)}`} cents={paydayDay.balance} hint={`${f.payday.description} em ${diffDays(f.payday.date, today)} dias${f.payday.estimated ? ' (estimado)' : ''}`} />
               ) : (
-                <Stat label="Salário" text="não encontrado" hint="cadastre como recorrência" />
+                <Stat label="Salário" text="não encontrado" hint="veja abaixo como cadastrar" />
               )}
               <Stat label={`Em ${short(f.days[f.days.length - 1]!.date)}`} cents={f.end} />
             </dl>
+            {!f.payday && (
+              <div className="mt-4 rounded-xl border border-warning/30 bg-warning/8 px-3 py-3 text-[14px]">
+                <p className="font-semibold">Não encontrei seu salário</p>
+                <p className="mt-0.5 text-muted">
+                  Sem ele a previsão só desconta contas e gastos, e o saldo parece despencar. Cadastre o salário como receita que se repete todo mês (marque <strong>Repetir</strong>) ou lance o salário deste mês: depois de dois meses o app passa a prever sozinho.
+                </p>
+                <Button size="sm" variant="primary" className="mt-2" icon={<Plus className="size-4" />} onClick={() => quickAdd({ kind: 'income' })}>Cadastrar salário</Button>
+              </div>
+            )}
+            {f.payday?.estimated && (
+              <p className="mt-3 text-[12px] text-subtle">
+                “{f.payday.description}” não está cadastrado como recorrência: estimei pelo que entrou nos últimos meses, no mesmo dia do mês. Cadastre como recorrente para a previsão ficar exata.
+              </p>
+            )}
+            <Breakdown f={f} />
           </Card>
 
           <Card className="p-5">
@@ -200,11 +219,40 @@ function EventRow({ e, today, after }: { e: ForecastEvent; today: string; after:
         <p className="text-[12px] text-subtle">
           {capitalize(relativeDay(e.date, today))}
           {' · '}
-          {{ pending: 'conta', recurrence: 'recorrente', invoice: 'fatura', income: 'entrada' }[e.source]}
+          {{ pending: 'conta', recurrence: 'recorrente', invoice: 'fatura', income: 'entrada', estimated: 'entrada estimada pelo histórico' }[e.source]}
         </p>
       </div>
       {e.overdue && <Badge tone="negative">Atrasada</Badge>}
       <Money cents={e.cents} signed className={cn('font-num font-semibold', e.cents > 0 ? 'text-positive' : 'text-fg')} />
     </li>
+  );
+}
+
+/** De onde vem o número final: saldo de hoje + entradas − contas − dia a dia. */
+function Breakdown({ f }: { f: NonNullable<ReturnType<typeof useForecast>['data']> }) {
+  const inflow = f.events.filter((e) => e.cents > 0).reduce((s, e) => s + e.cents, 0);
+  const bills = f.events.filter((e) => e.cents < 0).reduce((s, e) => s + e.cents, 0);
+  const dailyDays = f.days.filter((d) => d.daily > 0).length;
+  const daily = f.days.reduce((s, d) => s + d.daily, 0);
+  const last = f.days[f.days.length - 1]!.date;
+  const row = (label: string, cents: number, hint?: string) => (
+    <div className="flex items-baseline justify-between gap-3 py-1">
+      <dt className="text-muted">{label}{hint && <span className="block text-[12px] text-subtle">{hint}</span>}</dt>
+      <dd className={cn('font-num font-medium', cents < 0 && 'text-negative', cents > 0 && 'text-positive')}>{formatBRL(cents, { signed: true })}</dd>
+    </div>
+  );
+  return (
+    <details className="group mt-4 rounded-xl bg-surface-2/60 px-3 py-2 text-[14px]">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 font-semibold text-brand">
+        <HelpCircle className="size-4" aria-hidden /> Por que esse número?
+      </summary>
+      <dl className="mt-2 divide-y divide-line">
+        <div className="flex items-baseline justify-between gap-3 py-1"><dt className="text-muted">Saldo hoje</dt><dd className="font-num font-medium">{formatBRL(f.start)}</dd></div>
+        {row('Entradas previstas', inflow, inflow ? undefined : 'nenhuma entrada cadastrada no período')}
+        {row('Contas, recorrências e faturas', bills)}
+        {f.dailySpend > 0 && row('Gasto do dia a dia (estimado)', -daily, `${formatBRL(f.dailySpend)}/dia × ${dailyDays} dias · média de 60 dias, sem contas fixas e compras acima de ${formatBRL(BIG_ONE_OFF)}`)}
+        <div className="flex items-baseline justify-between gap-3 py-1 font-semibold"><dt>Em {formatDate(last)}</dt><dd className={cn('font-num', f.end < 0 && 'text-negative')}>{formatBRL(f.end)}</dd></div>
+      </dl>
+    </details>
   );
 }

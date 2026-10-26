@@ -61,3 +61,31 @@ describe('previsão de saldo', () => {
     expect(dailySpending(h, T, 60)).toBe(100);
   });
 });
+
+describe('salário e gasto do dia a dia', () => {
+  it('provento pequeno não vira "salário"', () => {
+    const f = buildForecast({ today: T, balance: 29_174, pending: [tx({ kind: 'income', description: 'JCP PETR4', amount_cents: 114, due_on: '2026-11-23' })], recurrences: [], invoices: [] });
+    expect(f.payday).toBeNull();
+    expect(f.days.at(-1)!.date).toBe('2026-11-24'); // 30 dias
+  });
+
+  it('estima o salário que cai todo mês sem estar cadastrado', () => {
+    const income = (d: string) => ({ description: 'Salário Empresa X', amount_cents: 450_000, occurred_on: d, kind: 'income' as const, status: 'received' as const, recurrence_id: null, account_id: 'a' });
+    const f = buildForecast({ today: T, balance: 29_174, pending: [], recurrences: [], invoices: [], incomeHistory: [income('2026-08-05'), income('2026-09-05'), income('2026-10-05')] });
+    expect(f.payday).toMatchObject({ date: '2026-11-05', cents: 450_000, estimated: true });
+    expect(f.events.find((e) => e.source === 'estimated')).toBeTruthy();
+    // já cadastrado como pendente: não duplica
+    const g = buildForecast({ today: T, balance: 0, pending: [tx({ kind: 'income', description: 'Salário Empresa X', amount_cents: 450_000, due_on: '2026-11-06' })], recurrences: [], invoices: [], incomeHistory: [income('2026-09-05'), income('2026-10-05')] });
+    expect(g.events.filter((e) => e.cents > 0)).toHaveLength(1);
+  });
+
+  it('dia a dia ignora contas fixas lançadas à mão e compras grandes', () => {
+    const paid = (description: string, amount_cents: number, occurred_on: string) => tx({ status: 'paid', due_on: null, description, amount_cents, occurred_on });
+    const h = [
+      paid('Aluguel', 150_000, '2026-08-10'), paid('Aluguel', 150_000, '2026-09-10'), paid('Aluguel', 150_000, '2026-10-10'),
+      paid('Celular novo', 300_000, '2026-10-01'),
+      paid('Padaria', 3_000, '2026-10-20'), paid('Padaria', 3_000, '2026-10-21'),
+    ];
+    expect(dailySpending(h, T, 60)).toBe(100);
+  });
+});
