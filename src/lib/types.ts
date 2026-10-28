@@ -351,4 +351,6 @@ export interface RendaSettings {
   auto_launch: boolean;
   auto_since: string | null;
   income_goal_cents: number | null;
+  /** plano de investimento (metas por classe e valores fora do app) */
+  plan?: unknown;
 }
