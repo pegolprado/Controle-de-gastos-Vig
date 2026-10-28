@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Building2, ChevronRight, Plus, RefreshCw } from 'lucide-react';
@@ -35,15 +36,19 @@ import { PositionCard } from './PositionCard';
 import { StatDetails, type StatKind } from './StatDetails';
 import { launchId, useToday } from './shared';
 import { AgendaTab, GoalTab, IrTab } from './tabs';
+import { PlanTab } from './PlanTab';
+import type { NextRecord } from '@/domain/plan';
 
 const MODE_ORDER: Record<MonthMode, number> = { upcoming: 0, received: 1, next: 2, none: 3 };
-type Tab = 'carteira' | 'agenda' | 'meta' | 'ir';
+type Tab = 'carteira' | 'agenda' | 'plano' | 'meta' | 'ir';
+const TABS: Tab[] = ['carteira', 'agenda', 'plano', 'meta', 'ir'];
 
 export default function FiiPage() {
   const ws = useWsId();
   const { canEdit, canContribute } = useWorkspace();
   const confirm = useConfirm();
-  const [tab, setTab] = useState<Tab>('carteira');
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => (TABS.includes(params.get('aba') as Tab) ? (params.get('aba') as Tab) : 'carteira'));
   const [adding, setAdding] = useState(false);
   const [trading, setTrading] = useState<FiiPosition | null>(null);
   const [launching, setLaunching] = useState<FiiPayment[] | null>(null);
@@ -158,6 +163,17 @@ export default function FiiPage() {
       })),
     [byPosition, quoteOf, today],
   );
+  // próximo provento já anunciado com data com de hoje em diante (para os sinais do Plano)
+  const nextRecord = useMemo(() => {
+    const m = new Map<string, NextRecord>();
+    for (const x of byPosition) {
+      const n = x.payments
+        .filter((p) => !p.projected && p.dist.record_date && p.dist.record_date >= today)
+        .sort((a, b) => a.dist.record_date!.localeCompare(b.dist.record_date!))[0];
+      if (n) m.set(x.position.ticker, { record_date: n.dist.record_date!, payment_date: n.dist.payment_date, rate: Number(n.dist.rate) });
+    }
+    return m;
+  }, [byPosition, today]);
   const tickerNames = useMemo(
     () => new Map(byPosition.map((x) => [x.position.ticker, nameOf.get(`${x.position.asset_type ?? 'fii'}:${baseCode(x.position.ticker)}`) ?? null])),
     [byPosition, nameOf],
@@ -271,6 +287,7 @@ export default function FiiPage() {
             options={[
               { value: 'carteira', label: 'Carteira' },
               { value: 'agenda', label: 'Agenda' },
+              { value: 'plano', label: 'Plano' },
               { value: 'meta', label: 'Meta' },
               { value: 'ir', label: 'IR' },
             ]}
@@ -335,6 +352,7 @@ export default function FiiPage() {
               onLaunch={setLaunching}
             />
           )}
+          {tab === 'plano' && <PlanTab holdings={holdings} next={nextRecord} settings={settings.data ?? null} canEdit={canEdit} today={today} loading={loading} />}
           {tab === 'meta' && <GoalTab key={settings.data?.income_goal_cents ?? 0} settings={settings.data ?? null} canEdit={canEdit} items={goalItems} loading={loading} />}
           {tab === 'ir' && <IrTab items={irItems} today={today} />}
 

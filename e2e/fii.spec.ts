@@ -146,4 +146,20 @@ test('Renda: FII e ações, mês vigente, compras com data e lançamento de rece
   // IR
   await page.getByRole('radio', { name: 'IR', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Rendimentos de FII' })).toBeVisible();
+
+  // plano para investir: divisão atual × meta, aporte sugerido e oportunidades
+  await page.getByRole('radio', { name: 'Plano', exact: true }).click();
+  const division = page.getByRole('region', { name: 'Divisão da carteira' });
+  await expect(division.getByRole('img', { name: /Divisão atual: Renda fixa 0%/ })).toBeVisible();
+  await division.getByRole('button', { name: 'Ajustar meta' }).click();
+  await division.getByRole('button', { name: /^Renda mensal/ }).click();
+  await division.getByLabel('Quanto você tem em renda fixa').fill('5000,00');
+  await division.getByRole('button', { name: 'Salvar plano' }).click();
+  await expect(page.getByText('Plano salvo.')).toBeVisible();
+  expect(state.tables.renda_settings[0]).toMatchObject({ plan: { targets: { rf: 25, acoes: 20, exterior: 10, fii: 45 }, manual: { rf: 500_000 } } });
+  const aporte = page.getByRole('region', { name: 'Onde aportar' });
+  await aporte.getByLabel('Quanto vai investir este mês?').fill('3000,00');
+  await expect(aporte.getByRole('list', { name: 'Sugestão de aporte' })).toContainText(/Comprar \d+ (cotas|ações) de/);
+  await expect(page.getByRole('region', { name: 'Oportunidades' })).toBeVisible();
+  await page.screenshot({ path: `e2e-screens/plano-${test.info().project.name}.png`, fullPage: true });
 });
