@@ -6,6 +6,7 @@ import { useWorkspace } from './WorkspaceProvider';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/Card';
 import { AuthLayout } from '@/features/auth/AuthLayout';
+import { MfaChallenge } from '@/features/auth/MfaChallenge';
 
 export function FullScreenLoader() {
   return (
@@ -16,11 +17,12 @@ export function FullScreenLoader() {
 }
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { session, loading, signOut } = useAuth();
+  const { session, loading, signOut, mfaRequired } = useAuth();
   const ws = useWorkspace();
   const location = useLocation();
   if (loading) return <FullScreenLoader />;
   if (!session) return <Navigate to="/entrar" replace state={{ from: location.pathname + location.search }} />;
+  if (mfaRequired) return <MfaChallenge />;
   if (ws.loading) return <FullScreenLoader />;
   if (ws.error) {
     return (

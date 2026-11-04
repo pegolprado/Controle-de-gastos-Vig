@@ -17,7 +17,7 @@ import { BASE_URL } from '@/lib/appUrl';
 import type { AppSettings, UserStatus } from '@/lib/types';
 import {
   adminAudit, adminErrors, adminListReleases, adminListUsers, adminRegisterRelease, adminSetReleaseStatus, adminSetUserStatus,
-  adminStats, adminUpdateSettings,
+  adminResetMfa, adminStats, adminUpdateSettings,
 } from '@/services/admin';
 import { createInvite, inviteLink, listInvites, revokeInvite } from '@/services/workspace';
 
@@ -107,6 +107,11 @@ function UsersTab() {
     onSuccess: () => { toast.success('Status atualizado.'); void qc.invalidateQueries({ queryKey: ['admin'] }); },
     onError: (e) => toast.error(errorMessage(e)),
   });
+  const resetMfa = useMutation({
+    mutationFn: (id: string) => adminResetMfa(id),
+    onSuccess: (n) => toast.success(n ? 'Verificação em duas etapas desativada. A pessoa entra só com a senha e pode ativar de novo.' : 'Essa pessoa não tinha a verificação em duas etapas ativada.'),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
   async function change(id: string, email: string, status: UserStatus) {
     const destructive = status === 'suspended' || status === 'revoked';
     if (destructive && !(await confirm({ title: `${status === 'suspended' ? 'Suspender' : 'Revogar'} ${email}?`, description: 'O acesso a todos os dados é bloqueado imediatamente pelo banco de dados.', confirmLabel: 'Confirmar' }))) return;
@@ -130,6 +135,18 @@ function UsersTab() {
                   <td className="px-3">{u.workspaces}</td>
                   <td className="px-3"><Badge tone={u.status === 'active' ? 'positive' : u.status === 'pending' ? 'warning' : 'negative'}>{STATUS_LABEL[u.status]}</Badge></td>
                   <td className="px-4 text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="mr-1"
+                      aria-label={`Desativar 2FA de ${u.email}`}
+                      title="Perdeu o celular? Desativa a verificação em duas etapas"
+                      onClick={async () => {
+                        if (await confirm({ title: `Desativar o 2FA de ${u.email}?`, description: 'Use só quando a própria pessoa pedir (perdeu o celular). Ela volta a entrar apenas com a senha.', confirmLabel: 'Desativar 2FA' })) resetMfa.mutate(u.id);
+                      }}
+                    >
+                      2FA
+                    </Button>
                     {!u.is_app_owner && (
                       <Select aria-label={`Alterar status de ${u.email}`} value={u.status} onChange={(e) => void change(u.id, u.email, e.target.value as UserStatus)} className="h-9 w-36 text-sm">
                         {(Object.keys(STATUS_LABEL) as UserStatus[]).map((s) => <option key={s} value={s}>{s === 'active' && u.status === 'pending' ? 'Aprovar' : STATUS_LABEL[s]}</option>)}

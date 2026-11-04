@@ -20,7 +20,12 @@ export interface MockState {
   isOwner: boolean;
   failNextInsert: boolean;
   insertCalls: number;
+  /** verificação em duas etapas: fator do app autenticador e nível da sessão atual */
+  mfa: { factor: { id: string; status: 'unverified' | 'verified' } | null; aal: 'aal1' | 'aal2' };
 }
+
+/** Código TOTP aceito pelo mock. */
+export const MOCK_TOTP = '123456';
 
 let seq = 1;
 const uid = () => `00000000-0000-4000-8000-${String(seq++).padStart(12, '0')}`;
@@ -55,6 +60,7 @@ export function createState(opts: { withData?: boolean; isOwner?: boolean } = {}
     : [];
   return {
     users: { 'ana@example.com': { id: USER, email: 'ana@example.com', password: 'Senha1234', full_name: 'Ana Souza' } },
+    mfa: { factor: null, aal: 'aal1' },
     tables: {
       accounts: [acc1, acc2],
       categories: cats,
@@ -188,9 +194,12 @@ function filterRows(rows: Row[], params: URLSearchParams) {
 }
 
 export async function installMock(page: Page, s: MockState) {
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const jwt = () => `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: USER, role: 'authenticated', aal: s.mfa.aal, exp: Math.floor(Date.now() / 1000) + 3600, session_id: 'sess-1' })}.mock-signature`;
+  const factors = () => (s.mfa.factor ? [{ id: s.mfa.factor.id, factor_type: 'totp', status: s.mfa.factor.status, friendly_name: 'Autenticador', created_at: '', updated_at: '' }] : []);
   const session = () => ({
-    access_token: 'mock.jwt.token', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: 'mock-refresh',
-    user: { id: USER, aud: 'authenticated', role: 'authenticated', email: 'ana@example.com', app_metadata: {}, user_metadata: { full_name: 'Ana Souza' }, created_at: new Date().toISOString(), last_sign_in_at: new Date().toISOString() },
+    access_token: jwt(), token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: 'mock-refresh',
+    user: { id: USER, aud: 'authenticated', role: 'authenticated', email: 'ana@example.com', app_metadata: {}, user_metadata: { full_name: 'Ana Souza' }, created_at: new Date().toISOString(), last_sign_in_at: new Date().toISOString(), factors: factors() },
   });
   const json = (route: Route, body: unknown, status = 200, headers: Record<string, string> = {}) =>
     route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*', ...headers }, body: JSON.stringify(body) });
@@ -207,6 +216,7 @@ export async function installMock(page: Page, s: MockState) {
       if (url.searchParams.get('grant_type') === 'refresh_token') return json(route, session());
       const u = s.users[body.email ?? ''];
       if (!u || u.password !== body.password) return json(route, { code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' }, 400);
+      s.mfa.aal = 'aal1'; // senha sozinha = primeiro nível
       return json(route, session());
     }
     if (path === '/auth/v1/signup') {
@@ -216,6 +226,28 @@ export async function installMock(page: Page, s: MockState) {
       return json(route, session());
     }
     if (path === '/auth/v1/user') return json(route, session().user);
+    // ---------- 2FA (TOTP)
+    if (path === '/auth/v1/factors' && req.method() === 'POST') {
+      s.mfa.factor = { id: 'factor-totp-1', status: 'unverified' };
+      return json(route, { id: 'factor-totp-1', type: 'totp', friendly_name: 'Autenticador', totp: { qr_code: 'data:image/svg+xml;utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>', secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/FinanceMV:ana?secret=JBSWY3DPEHPK3PXP' } });
+    }
+    const factorPath = path.match(/^\/auth\/v1\/factors\/([^/]+)(?:\/(challenge|verify))?$/);
+    if (factorPath) {
+      const [, id, action] = factorPath;
+      if (!s.mfa.factor || s.mfa.factor.id !== id) return json(route, { code: 404, msg: 'Factor not found' }, 404);
+      if (req.method() === 'DELETE') {
+        s.mfa.factor = null;
+        return json(route, { id });
+      }
+      if (action === 'challenge') return json(route, { id: 'challenge-1', type: 'totp', expires_at: Math.floor(Date.now() / 1000) + 300 });
+      if (action === 'verify') {
+        const body = req.postDataJSON() as { code: string };
+        if (body.code !== MOCK_TOTP) return json(route, { code: 422, error_code: 'mfa_verification_failed', msg: 'Invalid TOTP code entered' }, 422);
+        s.mfa.factor.status = 'verified';
+        s.mfa.aal = 'aal2';
+        return json(route, session());
+      }
+    }
     if (path === '/auth/v1/logout') return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
     if (path === '/auth/v1/recover') return json(route, {});
 

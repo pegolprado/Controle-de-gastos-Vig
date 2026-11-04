@@ -40,6 +40,13 @@ begin
     -- peek_invite: tela do convite antes do login; exige o código secreto do convite (só o hash fica no banco)
     and p.proname not in ('peek_invite');
   perform tests.assert(bad is null, 'funções privilegiadas executáveis sem login: ' || coalesce(bad, ''));
+
+  -- toda tabela com dados de usuário exige o segundo fator de quem ativou o 2FA
+  select string_agg(c.relname, ', ' order by c.relname) into bad
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind in ('r', 'p') and c.relname not in ('app_settings', 'app_releases')
+    and not exists (select 1 from pg_policy pol where pol.polrelid = c.oid and pol.polname = 'mfa_required' and not pol.polpermissive);
+  perform tests.assert(bad is null, 'tabelas sem a política de 2FA (crie mfa_required numa migração): ' || coalesce(bad, ''));
 end;
 $$;
 rollback;

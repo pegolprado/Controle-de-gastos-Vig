@@ -26,13 +26,13 @@ interface WorkspaceState {
 const WorkspaceContext = createContext<WorkspaceState | null>(null);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { session } = useAuth();
+  const { session, mfaRequired, loading: authLoading } = useAuth();
   const qc = useQueryClient();
   const userId = session?.user.id;
   const query = useQuery({
     queryKey: ['session-context', userId],
     queryFn: fetchSessionContext,
-    enabled: Boolean(userId),
+    enabled: Boolean(userId) && !mfaRequired && !authLoading,
     staleTime: 60_000,
   });
   const ctx = query.data;
