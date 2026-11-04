@@ -1,0 +1,30 @@
+# Análise de segurança do código (CodeQL): procura XSS, injeção, vazamento de dados…
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '41 7 * * 1' # toda segunda
+
+permissions:
+  contents: read
+
+jobs:
+  analisar:
+    name: Analisar (JavaScript/TypeScript)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:javascript-typescript

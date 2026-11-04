@@ -15,6 +15,11 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Finance MV</title>
     <script>
+      // Não deixa o app ser aberto dentro de outro site (clickjacking): o GitHub Pages
+      // não envia frame-ancestors/X-Frame-Options, então a proteção fica aqui.
+      if (window.top !== window.self) {
+        try { window.top.location.replace(window.location.href); } catch (e) { document.documentElement.style.display = 'none'; }
+      }
       // Aplica o tema antes da primeira pintura (evita flash claro/escuro)
       (function () {
         try {
