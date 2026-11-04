@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Cliente PostgreSQL 17
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
@@ -27,7 +27,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: ./scripts/backup.sh "backup-$(date -u +%Y%m%d).dump"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: db-backup-${{ github.run_id }}
           path: backup-*.dump.gpg
