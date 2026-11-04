@@ -19,6 +19,11 @@ concurrency:
   group: deploy-${{ github.event.workflow_run.head_branch || inputs.environment }}
   cancel-in-progress: false
 
+
+# privilégio mínimo para o token do GitHub
+permissions:
+  contents: read
+
 jobs:
   deploy:
     # só publica se o CI passou (testes obrigatórios antes de promover)

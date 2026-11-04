@@ -18,6 +18,37 @@ if (existsSync(headersPath)) {
 }
 console.log(`CSP: ${hashes.length} script(s) inline com hash.`);
 
+// GitHub Pages não envia cabeçalhos próprios (_headers só vale em Cloudflare/Netlify):
+// a mesma política vai num <meta> dentro do index.html. frame-ancestors não funciona em
+// <meta>; a proteção contra iframe fica no script inline do index.html.
+const supa = (() => {
+  try {
+    return new URL(process.env.VITE_SUPABASE_URL || '').origin;
+  } catch {
+    return '';
+  }
+})();
+const connect = ["'self'", 'https://*.supabase.co', 'wss://*.supabase.co'];
+if (supa && !connect.includes(supa)) connect.push(supa, supa.replace(/^http/, 'ws'));
+const csp = [
+  "default-src 'self'",
+  `script-src 'self' 'wasm-unsafe-eval' ${hashes.join(' ')}`.trim(),
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  `connect-src ${connect.join(' ')}`,
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  ...(supa.startsWith('https:') ? ['upgrade-insecure-requests'] : []),
+].join('; ');
+const withCsp = html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${csp}" />`);
+if (withCsp === html) throw new Error('postbuild: não achei onde colocar a CSP no index.html');
+writeFileSync(resolve(dist, 'index.html'), withCsp);
+console.log('CSP aplicada no index.html.');
+
 // GitHub Pages não tem fallback de SPA: 404.html = index.html faz as rotas funcionarem.
 if (process.env.SPA_404 === '1') {
   copyFileSync(resolve(dist, 'index.html'), resolve(dist, '404.html'));

@@ -5,6 +5,11 @@ on:
     - cron: '17 6 * * *' # diariamente às 03:17 (horário de Brasília)
   workflow_dispatch:
 
+
+# privilégio mínimo para o token do GitHub
+permissions:
+  contents: read
+
 jobs:
   backup:
     runs-on: ubuntu-latest

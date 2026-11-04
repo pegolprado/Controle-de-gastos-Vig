@@ -1,0 +1,26 @@
+# Atualizações de dependências: abre PRs semanais (o CI testa tudo antes do merge).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 5
+    groups:
+      seguranca:
+        applies-to: security-updates
+        patterns: ['*']
+      menores:
+        update-types: [minor, patch]
+        patterns: ['*']
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ['*']

@@ -9,6 +9,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+
+# privilégio mínimo para o token do GitHub
+permissions:
+  contents: read
+
 jobs:
   quality:
     name: Lint, tipos, testes unitários e build

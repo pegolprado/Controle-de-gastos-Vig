@@ -40,3 +40,8 @@ export async function adminListReleases() {
     await supabase.from('app_releases').select('*').order('published_at', { ascending: false }).limit(30),
   );
 }
+
+/** Desativa o 2FA de quem perdeu o celular (só o proprietário do app). */
+export async function adminResetMfa(user: string): Promise<number> {
+  return unwrap(await supabase.rpc('admin_reset_mfa', { p_user: user })) as number;
+}

@@ -1,3 +1,4 @@
+import { TwoFactorCard } from './TwoFactorCard';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
@@ -105,6 +106,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader title="Segurança" />
           <div className="grid gap-3 p-5">
+            <TwoFactorCard />
             <p className="text-[13px] text-muted">Último login com senha: {formatDateTime(session?.user.last_sign_in_at)}</p>
             <div className="flex flex-wrap gap-2">
               <Button icon={<KeyRound className="size-4" />} onClick={() => setPwOpen(true)}>Alterar senha</Button>
