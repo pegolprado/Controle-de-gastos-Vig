@@ -163,3 +163,29 @@ test('Renda: FII e ações, mês vigente, compras com data e lançamento de rece
   await expect(page.getByRole('region', { name: 'Oportunidades' })).toBeVisible();
   await page.screenshot({ path: `e2e-screens/plano-${test.info().project.name}.png`, fullPage: true });
 });
+
+test('número mágico: dados da B3, fórmula, meta, tabela mês a mês e CSV', async ({ page }) => {
+  await setup(page);
+  await add(page, 'XPML11', '10');
+  await expect(page.getByRole('dialog', { name: 'Adicionar à carteira' })).toBeHidden();
+  await page.getByRole('radio', { name: 'Mágico', exact: true }).click();
+  await expect(page.getByLabel('Fundo da carteira')).toHaveValue('XPML11');
+  const magic = page.getByRole('region', { name: 'Resultado do número mágico' });
+  // 2 × 106,07 ÷ 0,92 = 230,6 → 231 cotas
+  await expect(magic.getByText('231', { exact: false }).first()).toBeVisible();
+  await expect(magic).toContainText('Você tem 10: faltam 221 cotas');
+  await expect(page.getByRole('status').filter({ hasText: /por mês \(em R\$ de hoje\)/ })).toBeVisible();
+  await page.getByLabel('Cotas por mês').fill('1');
+  await expect(magic).toContainText('116');
+  const table = page.getByRole('table', { name: 'Simulação' });
+  await expect(table.getByRole('row')).toHaveCount(31); // cabeçalho + 30 anos
+  await page.getByRole('radio', { name: 'Mês a mês' }).click();
+  await expect(table.getByRole('row')).toHaveCount(361);
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'CSV' }).click();
+  expect((await download).suggestedFilename()).toBe('numero-magico-XPML11.csv');
+  await page.screenshot({ path: `e2e-screens/magico-${test.info().project.name}.png`, fullPage: true });
+  await page.getByLabel('Código do fundo').fill('XXXX11');
+  await page.getByRole('button', { name: 'Buscar' }).click();
+  await expect(page.getByText('Não encontramos XXXX11 na B3.')).toBeVisible();
+});
