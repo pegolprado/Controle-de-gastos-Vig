@@ -31,3 +31,17 @@ describe('número mágico', () => {
     expect(r.invested).toBe(160_026 + 360 * 50_000);
   });
 });
+
+describe('ponto de partida', () => {
+  it('começa com as cotas que a pessoa já tem', () => {
+    const r = simulateMagic({ price: 885, dividend: 9.5, perMonth: 2, inflation: 6, goal: 50_000, startShares: 313 });
+    expect(r.magic).toBe(187); // 2 × 8,85 ÷ 0,095 = 186,3 → 187
+    expect(r.initial).toBe(277_005);
+    expect(r.rows[0]).toMatchObject({ shares: 313, income: 2974, bought: 3 });
+  });
+  it('sem cotas, só o aporte compra', () => {
+    const r = simulateMagic({ price: 1000, dividend: 10, perMonth: 1, inflation: 0, goal: 0, startShares: 0, contribution: 5000 });
+    expect(r.rows[0]).toMatchObject({ shares: 0, income: 0, bought: 5 });
+    expect(r.rows[1]!.shares).toBe(5);
+  });
+});

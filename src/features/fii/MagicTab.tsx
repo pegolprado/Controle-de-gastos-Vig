@@ -13,10 +13,11 @@ import { centsToCSV, downloadFile, toCSV } from '@/lib/csv';
 import { addDays, formatDate, formatDateTime } from '@/lib/dates';
 import { formatBRL } from '@/lib/money';
 import { normalizeTicker, type Holding } from '@/domain/fii';
-import { simulateMagic } from '@/domain/magic';
+import { magicNumberFor, simulateMagic } from '@/domain/magic';
 import { listRendaMarket, syncAsset } from '@/services/fii';
 
 const PREFS = 'fmv.renda.magico';
+type StartMode = 'mine' | 'magic' | 'custom';
 const parseRate = (s: string) => {
   const n = Number(s.replace(/\./g, '').replace(',', '.'));
   return Number.isFinite(n) && n > 0 ? n : 0;
@@ -76,6 +77,8 @@ export function MagicTab({ holdings, today }: { holdings: Holding[]; today: stri
   const [price, setPrice] = useState(0);
   const [rateText, setRateText] = useState('');
   const [view, setView] = useState<'ano' | 'mes'>('ano');
+  // ponto de partida: as cotas que você já tem, o número mágico ou outro valor
+  const [start, setStart] = useState<{ ticker: string; mode: StartMode; shares: number; value: number }>({ ticker: '', mode: 'magic', shares: 0, value: 0 });
   const fund = useFundData(prefs.ticker, today);
 
   useEffect(() => {
@@ -101,7 +104,24 @@ export function MagicTab({ holdings, today }: { holdings: Holding[]; today: stri
     set('ticker', n);
   };
 
-  const input = useDeferredValue({ price, dividend: parseRate(rateText) * 100, ...prefs });
+  const owned = fiis.find((h) => h.ticker === prefs.ticker)?.quantity ?? 0;
+  // trocou de fundo: começa pelas suas cotas (se tiver) ou pelo número mágico
+  const mode: StartMode = start.ticker === prefs.ticker ? start.mode : owned > 0 ? 'mine' : 'magic';
+  const same = start.ticker === prefs.ticker;
+  const customShares = same ? start.shares : 0;
+  const customValue = same ? start.value : 0;
+  const magicNow = magicNumberFor(price, parseRate(rateText) * 100, Math.max(1, prefs.perMonth));
+  const startShares = mode === 'mine' ? owned : mode === 'custom' ? customShares : magicNow;
+  const clampShares = (n: number) => Math.max(0, Math.min(10_000_000, Math.round(n)));
+  const setMode = (m: StartMode) => {
+    const shares = m === 'custom' ? customShares || startShares : customShares;
+    setStart({ ticker: prefs.ticker, mode: m, shares, value: m === 'custom' && !customShares ? Math.round(shares * price) : customValue });
+  };
+  // digitar cotas atualiza o valor; digitar o valor compra as cotas inteiras que couberem (o valor fica como digitado)
+  const setCustomShares = (n: number) => setStart({ ticker: prefs.ticker, mode: 'custom', shares: clampShares(n), value: Math.round(clampShares(n) * price) });
+  const setCustomValue = (v: number) => setStart({ ticker: prefs.ticker, mode: 'custom', shares: price > 0 ? clampShares(Math.floor(v / price)) : 0, value: Math.min(v, 100_000_000_000) });
+
+  const input = useDeferredValue({ price, dividend: parseRate(rateText) * 100, ...prefs, startShares });
   const sim = useMemo(
     () =>
       simulateMagic({
@@ -112,10 +132,10 @@ export function MagicTab({ holdings, today }: { holdings: Holding[]; today: stri
         goal: input.goal,
         contribution: input.contribution,
         months: input.years * 12,
+        startShares: input.startShares,
       }),
     [input],
   );
-  const owned = fiis.find((h) => h.ticker === prefs.ticker)?.quantity ?? 0;
   const yearly = useMemo(
     () =>
       sim.rows
@@ -245,6 +265,42 @@ export function MagicTab({ holdings, today }: { holdings: Holding[]; today: stri
         </div>
       </Card>
 
+      <Card className="p-5" role="region" aria-label="Ponto de partida">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-[15px] font-semibold">Começar a simulação com</h2>
+            <p className="text-[13px] text-subtle">{owned > 0 ? `Você tem ${owned.toLocaleString('pt-BR')} cotas de ${prefs.ticker} na carteira.` : `Você ainda não tem ${prefs.ticker}: simule com o número mágico ou com o valor que pretende investir.`}</p>
+          </div>
+          <Segmented
+            size="sm"
+            className="w-full sm:w-auto"
+            label="Ponto de partida"
+            value={mode}
+            onChange={setMode}
+            options={[
+              ...(owned > 0 ? [{ value: 'mine' as StartMode, label: `Minhas (${owned.toLocaleString('pt-BR')})` }] : []),
+              { value: 'magic' as StartMode, label: `Mágico${magicNow ? ` (${magicNow.toLocaleString('pt-BR')})` : ''}` },
+              { value: 'custom' as StartMode, label: 'Outro' },
+            ]}
+          />
+        </div>
+        {mode === 'custom' && (
+          <div className="mt-4 grid max-w-lg grid-cols-2 gap-3">
+            <Field label="Cotas no início">
+              {(id) => <Input id={id} inputMode="numeric" value={String(customShares)} onChange={(e) => setCustomShares(Number(e.target.value.replace(/\D/g, '')) || 0)} className="font-num" />}
+            </Field>
+            <Field label="Ou o valor a investir" hint={price ? 'compra as cotas inteiras que couberem' : undefined}>
+              {(id, d) => <MoneyInput id={id} aria-describedby={d} value={customValue} onChange={setCustomValue} />}
+            </Field>
+          </div>
+        )}
+        {sim.rows[0] && (
+          <p className="mt-3 rounded-xl bg-surface-2 px-3 py-2.5 text-[14px]">
+            Com <strong>{startShares.toLocaleString('pt-BR')} cotas</strong> (≈ {formatBRL(sim.initial)}), o rendimento de hoje é <strong className="text-positive">{formatBRL(sim.rows[0].income)} por mês</strong> e compra <strong>{sim.rows[0].bought} {sim.rows[0].bought === 1 ? 'cota' : 'cotas'}</strong> sozinho{prefs.contribution > 0 ? ` (com o aporte de ${formatBRL(prefs.contribution)})` : ''}.
+          </p>
+        )}
+      </Card>
+
       {sim.magic === 0 ? (
         <Card className="p-5 text-[14px] text-muted">Informe o preço da cota e o rendimento por cota para calcular.</Card>
       ) : (
@@ -263,9 +319,13 @@ export function MagicTab({ holdings, today }: { holdings: Holding[]; today: stri
               )}
             </Card>
             <Card className="p-5">
-              <p className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-subtle"><Wallet className="size-4" aria-hidden /> Investimento inicial (uma única vez)</p>
+              <p className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-subtle"><Wallet className="size-4" aria-hidden /> {mode === 'mine' ? 'Sua posição hoje' : 'Investimento inicial (uma única vez)'}</p>
               <Money cents={sim.initial} className="font-num mt-1 block text-4xl font-bold" />
-              <p className="mt-1 text-[13px] text-subtle">Com isso, já no mês 1 o rendimento ({formatBRL(sim.rows[0]?.income ?? 0)}) compra {sim.rows[0]?.bought ?? 0} cotas sozinho.</p>
+              <p className="mt-1 text-[13px] text-subtle">
+                {mode === 'magic' ? 'O número mágico custa ' : `${startShares.toLocaleString('pt-BR')} cotas valem `}
+                {formatBRL(sim.initial)}; já no mês 1 o rendimento ({formatBRL(sim.rows[0]?.income ?? 0)}) compra {sim.rows[0]?.bought ?? 0} {sim.rows[0]?.bought === 1 ? 'cota' : 'cotas'}.
+                {mode !== 'magic' && sim.magic > 0 && ` O número mágico (${sim.magic}) custaria ${formatBRL(Math.round(sim.magic * input.price))}.`}
+              </p>
             </Card>
           </div>
 
@@ -288,8 +348,12 @@ export function MagicTab({ holdings, today }: { holdings: Holding[]; today: stri
           )}
 
           <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Resumo da simulação">
-            <Summary label="Você coloca" value={formatBRL(sim.invested)} hint={prefs.contribution ? 'inicial + aportes' : 'uma única vez'} />
-            <Summary label="Cotas no início" value={sim.magic.toLocaleString('pt-BR')} />
+            <Summary
+              label={mode === 'mine' ? 'Já tem + aportes' : 'Você coloca'}
+              value={formatBRL(sim.invested)}
+              hint={prefs.contribution ? `${formatBRL(sim.initial)} + ${formatBRL(prefs.contribution)}/mês` : mode === 'mine' ? 'sem aportes novos' : 'uma única vez'}
+            />
+            <Summary label="Cotas no início" value={startShares.toLocaleString('pt-BR')} />
             <Summary label={`Cotas no mês ${months}`} value={(sim.last ? sim.last.shares + sim.last.bought : 0).toLocaleString('pt-BR')} />
             <Summary label={`Renda no mês ${months}`} value={formatBRL(sim.last?.income ?? 0)} hint={`${formatBRL(sim.last?.realIncome ?? 0)} em R$ de hoje`} />
           </section>

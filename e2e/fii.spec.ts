@@ -174,6 +174,20 @@ test('número mágico: dados da B3, fórmula, meta, tabela mês a mês e CSV', a
   // 2 × 106,07 ÷ 0,92 = 230,6 → 231 cotas
   await expect(magic.getByText('231', { exact: false }).first()).toBeVisible();
   await expect(magic).toContainText('Você tem 10: faltam 221 cotas');
+  // começa pelas cotas que já tem; dá para simular outro valor
+  const startCard = page.getByRole('region', { name: 'Ponto de partida' });
+  await expect(startCard.getByRole('radio', { name: 'Minhas (10)' })).toHaveAttribute('aria-checked', 'true');
+  await expect(startCard).toContainText('Com 10 cotas');
+  await startCard.getByRole('radio', { name: 'Outro', exact: true }).click();
+  // como uma pessoa: apaga e digita os números (o campo de dinheiro preenche da direita)
+  const valueInput = startCard.getByLabel('Ou o valor a investir');
+  await valueInput.click();
+  for (let i = 0; i < 10; i++) await valueInput.press('Backspace');
+  await valueInput.pressSequentially('500000');
+  await expect(valueInput).toHaveValue('5.000,00');
+  await expect(startCard).toContainText('Com 47 cotas'); // 5.000 ÷ 106,07
+  await startCard.getByRole('radio', { name: /^Mágico/ }).click();
+  await expect(startCard).toContainText('Com 231 cotas');
   await expect(page.getByRole('status').filter({ hasText: /por mês \(em R\$ de hoje\)/ })).toBeVisible();
   await page.getByLabel('Cotas por mês').fill('1');
   await expect(magic).toContainText('116');
