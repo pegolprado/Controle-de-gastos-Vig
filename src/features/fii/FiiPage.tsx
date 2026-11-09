@@ -37,11 +37,12 @@ import { StatDetails, type StatKind } from './StatDetails';
 import { launchId, useToday } from './shared';
 import { AgendaTab, GoalTab, IrTab } from './tabs';
 import { PlanTab } from './PlanTab';
+import { MagicTab } from './MagicTab';
 import type { NextRecord } from '@/domain/plan';
 
 const MODE_ORDER: Record<MonthMode, number> = { upcoming: 0, received: 1, next: 2, none: 3 };
-type Tab = 'carteira' | 'agenda' | 'plano' | 'meta' | 'ir';
-const TABS: Tab[] = ['carteira', 'agenda', 'plano', 'meta', 'ir'];
+type Tab = 'carteira' | 'agenda' | 'plano' | 'magico' | 'meta' | 'ir';
+const TABS: Tab[] = ['carteira', 'agenda', 'plano', 'magico', 'meta', 'ir'];
 
 export default function FiiPage() {
   const ws = useWsId();
@@ -279,8 +280,10 @@ export default function FiiPage() {
             <Stat onOpen={() => setDetail('carteira')} label="Valor da carteira" cents={portfolioCents} tone="neutral" loading={loading} footer="pela última cotação" />
           </section>
 
+          {/* 6 abas: no celular rolam de lado em vez de alargar a página */}
+          <div className="scrollbar-none -mx-4 mt-5 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <Segmented
-            className="mt-5 max-w-md"
+            className="w-max min-w-full sm:w-auto sm:min-w-0 sm:max-w-xl"
             label="Visualização"
             value={tab}
             onChange={setTab}
@@ -288,10 +291,12 @@ export default function FiiPage() {
               { value: 'carteira', label: 'Carteira' },
               { value: 'agenda', label: 'Agenda' },
               { value: 'plano', label: 'Plano' },
+              { value: 'magico', label: 'Mágico' },
               { value: 'meta', label: 'Meta' },
               { value: 'ir', label: 'IR' },
             ]}
           />
+          </div>
 
           {market.error && <div className="mt-4"><ErrorState error={market.error} onRetry={() => void market.refetch()} /></div>}
 
@@ -353,6 +358,7 @@ export default function FiiPage() {
             />
           )}
           {tab === 'plano' && <PlanTab holdings={holdings} next={nextRecord} settings={settings.data ?? null} canEdit={canEdit} today={today} loading={loading} />}
+          {tab === 'magico' && <MagicTab holdings={holdings} today={today} />}
           {tab === 'meta' && <GoalTab key={settings.data?.income_goal_cents ?? 0} settings={settings.data ?? null} canEdit={canEdit} items={goalItems} loading={loading} />}
           {tab === 'ir' && <IrTab items={irItems} today={today} />}
 
